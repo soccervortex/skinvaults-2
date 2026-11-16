@@ -13,3 +13,4 @@ community-bot/data/
 
 # Internal analysis of the old site (usage numbers, legal notes): stays local
 docs/audit.md
+!migrations/*.sql
