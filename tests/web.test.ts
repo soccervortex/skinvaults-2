@@ -167,3 +167,13 @@ test("config validates the public settings", () => {
   assert.throws(() => loadConfig({ ...good, DISCORD_INVITE_URL: "https://evil.test/x" }), /DISCORD_INVITE_URL/);
   assert.equal(loadConfig(good).site.discordInviteUrl, null);
 });
+
+test("HTTP: fonts are served from an allowlisted path only", async () => {
+  const ok = await fetch(origin + "/fonts/barlow-condensed-latin-800-normal.woff2");
+  assert.equal(ok.status, 200);
+  assert.equal(ok.headers.get("content-type"), "font/woff2");
+  assert.ok((await ok.arrayBuffer()).byteLength > 1000);
+  assert.equal((await fetch(origin + "/fonts/nope.woff2")).status, 404);
+  assert.equal((await fetch(origin + "/fonts/..%2F..%2Fpackage.json")).status, 404);
+  assert.equal((await fetch(origin + "/fonts/LICENSE-barlow.txt")).status, 404);
+});

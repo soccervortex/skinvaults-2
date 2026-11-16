@@ -1,18 +1,24 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { readFile } from "node:fs/promises";
 import type { Pool } from "../platform/db.ts";
 import { cssPath, esc, faviconSvg, layout, type SiteInfo } from "./html.ts";
+import { logoPng } from "./logo.ts";
 import { themeCss } from "./theme.ts";
 import { actionPage, homePage, notFoundPage, privacyPage } from "./pages.ts";
 import { confirm, looksLikeToken, signup, unsubscribe } from "../waitlist.ts";
 import { createRateLimiter } from "./rateLimit.ts";
 
 const MAX_BODY = 4096;
+// Self-hosted fonts live in public/fonts (shipped in the image). Only names matching this pattern are ever read.
+const FONT_DIR = new URL("../../public/fonts/", import.meta.url);
+const FONT_RE = /^\/fonts\/([a-z0-9-]+\.woff2)$/;
+const fontCache = new Map<string, Buffer>();
 const SECURITY_HEADERS = {
   "x-content-type-options": "nosniff",
   "referrer-policy": "strict-origin-when-cross-origin",
   "x-frame-options": "DENY",
   "permissions-policy": "camera=(), microphone=(), geolocation=()",
-  "content-security-policy": "default-src 'none'; style-src 'self'; img-src 'self' data:; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
+  "content-security-policy": "default-src 'none'; style-src 'self'; img-src 'self' data:; font-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
 };
 
 export type Web = { handle(req: IncomingMessage, res: ServerResponse, url: URL): Promise<boolean> };
@@ -63,7 +69,23 @@ export function createWeb(pool: Pool, site: SiteInfo): Web {
       const get = req.method === "GET" || req.method === "HEAD";
 
       if (get && path === cssPath) return text(res, "text/css; charset=utf-8", themeCss, "public, max-age=31536000, immutable");
+      const font = get ? FONT_RE.exec(path) : null;
+      if (font) {
+        let data = fontCache.get(font[1]!);
+        if (!data) {
+          try { data = await readFile(new URL(font[1]!, FONT_DIR)); } catch { return false; }
+          fontCache.set(font[1]!, data);
+        }
+        res.writeHead(200, { "content-type": "font/woff2", "cache-control": "public, max-age=31536000, immutable", "x-content-type-options": "nosniff" });
+        res.end(data);
+        return true;
+      }
       if (get && path === "/favicon.svg") return text(res, "image/svg+xml", faviconSvg, "public, max-age=86400");
+      if (get && (path === "/logo.png" || path === "/favicon.ico")) {
+        res.writeHead(200, { "content-type": "image/png", "cache-control": "public, max-age=86400", "x-content-type-options": "nosniff" });
+        res.end(logoPng);
+        return true;
+      }
       if (get && path === "/robots.txt") {
         return text(res, "text/plain; charset=utf-8", `User-agent: *\nAllow: /\nDisallow: /waitlist\n\nSitemap: ${site.baseUrl}/sitemap.xml\n`, "public, max-age=3600");
       }

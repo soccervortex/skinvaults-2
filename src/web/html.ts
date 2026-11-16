@@ -43,15 +43,22 @@ ${robots}
 <meta property="og:url" content="${esc(url)}">
 <meta name="twitter:card" content="summary">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="preload" href="/fonts/barlow-condensed-latin-800-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/fonts/barlow-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<meta property="og:image" content="${esc(site.baseUrl)}/logo.png">
+<meta name="theme-color" content="#0b0d10">
 <link rel="stylesheet" href="${cssPath}">
 ${ld}
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
-<header class="site"><div class="wrap"><a class="brand" href="/">${SITE_NAME}</a></div></header>
-<main id="main"><div class="wrap">
+<header class="site"><div class="wrap">
+<a class="brand" href="/"><span class="mark cut" aria-hidden="true">SV</span><span class="name">${SITE_NAME}</span></a>
+<nav class="top" aria-label="Main"><a href="/#ideas">Ideas</a>${site.discordInviteUrl ? `<a href="${esc(site.discordInviteUrl)}" rel="noopener">Discord</a>` : ""}<a class="cta cut" href="/#join">Join the list</a></nav>
+</div></header>
+<main id="main">
 ${page.body}
-</div></main>
+</main>
 <footer class="site"><div class="wrap">
 <span>&copy; ${new Date().getUTCFullYear()} ${SITE_NAME}</span>
 <nav aria-label="Footer"><a href="/privacy">Privacy</a>${site.discordInviteUrl ? ` &middot; <a href="${esc(site.discordInviteUrl)}" rel="noopener">Discord</a>` : ""}</nav>
@@ -60,4 +67,4 @@ ${page.body}
 </html>`;
 }
 
-export const faviconSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#2457d6"/><path d="M18 22h28v8H28v4h18v14H18v-8h18v-4H18z" fill="#fff"/></svg>`;
+export const faviconSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><path d="M0 0h52l12 12v52H12L0 52z" fill="#f0a62b"/><text x="32" y="45" text-anchor="middle" font-family="Arial Narrow,Arial,sans-serif" font-weight="800" font-size="36" fill="#0b0d10">SV</text></svg>`;
