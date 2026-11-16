@@ -1,0 +1,15 @@
+# Decisions log
+
+| Date | Decision | Rejected | Why |
+|---|---|---|---|
+| 2026-11-16 | One PostgreSQL database, plain SQL migrations | MongoDB again, Redis, key-value layer | The old site had 318 collections and a fake KV store on top. Nebula has a PostgreSQL template with backups |
+| 2026-11-16 | Plain Node server for the foundation, no web framework yet | Choosing Next.js now | Owner: the framework depends on what the site contains. Foundation code does not depend on it |
+| 2026-11-16 | `pg` driver, no ORM | Prisma, Drizzle | Few tables, SQL is the source of truth, fewer dependencies |
+| 2026-11-16 | `nodemailer` for SMTP (Hostinger, port 587 STARTTLS) | The old hand-written SMTP client (`raw-smtp.ts`, 175 lines of protocol code) | A maintained library over our own protocol code. Owner can overrule if "no nodemailer" was meant literally |
+| 2026-11-16 | Outbox table for every outbound message, webhook URLs only in env | Sending inline with try/catch | The old site lost Discord messages silently |
+| 2026-11-16 | Alerts bypass the outbox and use every configured channel | Alerting through the outbox | A broken outbox must still be able to raise an alarm |
+| 2026-11-16 | In-process scheduler with `job_runs` table | External cron, Inngest | One process, visible history, no extra service. Single instance assumed |
+| 2026-11-16 | `node:test` and `tsx` for tests | Vitest, Jest | Built in, fewer dependencies |
+| 2026-11-16 | New small community bot (`community-bot/`, discord.js 14, own token, one server) for lockdown and feedback tickets | Adding it to the old 7,590-line bot | The old bot serves 48 servers, uses its own Atlas database and is not running on this PC, so changing it blind is risky. The new one is about 600 lines and can be tested on its own |
+| 2026-11-16 | Lockdown stores a full permission snapshot on disk first and verifies the restore against Discord | Toggling a single "everyone" flag | Restoring "what it was" needs the real previous state of every channel, and a wrong restore on a live community cannot be undone by hand |
+| 2026-11-16 | Bot state in JSON files under `DATA_DIR` | A database for the bot | One writer, a few small files, fits the Nebula `/data` volume and backups |

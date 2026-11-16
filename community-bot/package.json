@@ -1,0 +1,18 @@
+{
+  "name": "skinvaults-community-bot",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Community bot for the SkinVaults Discord: server lockdown with exact restore, plus a private feedback ticket flow.",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "test": "node --test test/*.test.js"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "discord.js": "14.26.5"
+  }
+}

@@ -1,0 +1,15 @@
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+*.log
+backups/
+*.sql
+*.sql.gz
+
+# Bot runtime data: Discord ids and what members typed
+community-bot/data/
+
+# Internal analysis of the old site (usage numbers, legal notes): stays local
+docs/audit.md
