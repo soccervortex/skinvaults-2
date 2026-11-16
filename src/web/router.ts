@@ -23,8 +23,9 @@ const SECURITY_HEADERS = {
 
 export type Web = { handle(req: IncomingMessage, res: ServerResponse, url: URL): Promise<boolean> };
 
+// no-transform stops Cloudflare from rewriting the page (it would replace the contact address with "[email protected]").
 function html(res: ServerResponse, status: number, body: string, extra: Record<string, string> = {}): true {
-  res.writeHead(status, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", ...SECURITY_HEADERS, ...extra });
+  res.writeHead(status, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store, no-transform", ...SECURITY_HEADERS, ...extra });
   res.end(body);
   return true;
 }

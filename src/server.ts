@@ -69,7 +69,7 @@ async function main(): Promise<void> {
         }
         if (await web.handle(req, res, url)) return;
         if ((req.headers.accept ?? "").includes("text/html")) {
-          res.writeHead(404, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
+          res.writeHead(404, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store, no-transform" });
           return void res.end(notFoundHtml(site));
         }
         return fail(res, 404, "not_found", "No such route");

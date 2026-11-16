@@ -121,6 +121,7 @@ test("HTTP: home, privacy, robots, sitemap and css are served with the right hea
   assert.equal(home.status, 200);
   assert.match(home.headers.get("content-type")!, /text\/html/);
   assert.match(home.headers.get("content-security-policy")!, /default-src 'none'/);
+  assert.match(home.headers.get("cache-control")!, /no-transform/);
   const html = await home.text();
   const css = /href="(\/assets\/theme\.[a-f0-9]+\.css)"/.exec(html)![1]!;
   assert.equal((await fetch(origin + css)).status, 200);
