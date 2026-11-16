@@ -48,3 +48,20 @@ Nebula builds the branch head only and the branch cannot be changed after creati
 3. `docker exec -i scratch psql -U postgres < backup.sql`.
 4. Check: a probe table with one row created before the backup came back, and `job_runs`, `outbox`, `schema_migrations` were all present.
 To restore for real, run the same into a new Nebula PostgreSQL server, point `DATABASE_URL` to it and redeploy.
+
+## Domain and tunnel (skinvaults.online)
+
+Traffic path: Cloudflare (proxied apex and `www`) -> tunnel `skinvaults-tunnel` (system service on the Nebula PC, config `~/.cloudflared/config.yml`) -> Caddy (`cloud-platform-caddy-1`, 192.168.1.252:443) -> app container.
+
+- Adding a domain in Nebula needs a TXT record `_nebula-verify.<host>` = `nebula-verify=<token>`; Nebula then creates the Caddy helper container.
+- Tunnel ingress for the apex and `www` points at `https://192.168.1.252:443` with `noTLSVerify` and `originServerName` set to the host.
+- **Certificates:** Caddy gets them by HTTP-01. Before the first certificate the HTTPS origin has none, so the tunnel needs a rule per host that sends `^/\.well-known/acme-challenge/` to `http://192.168.1.252:80`, placed above the HTTPS rule. Without it the site is a 502 and Let's Encrypt counts failed attempts (limit: 5 per hour per name, then wait).
+- Edit the tunnel config only after making a backup copy next to it. Apply it by restarting the service (`kill -TERM` of the cloudflared process; systemd starts it again). Check `skinapi.skinvaults.online` and the other hostnames afterwards, they share the tunnel.
+- Rollback: restore the backup copy of `config.yml` and restart the tunnel.
+
+## Waiting list
+
+- Table `waitlist` (pending or confirmed). Mail goes through the outbox, so a mail provider outage delays confirmation mails but loses nothing; check `/status` for outbox counts.
+- Remove a person by hand: `delete from waitlist where lower(email) = lower('...')`. Their own remove link does the same.
+- Settings: `PUBLIC_BASE_URL` (canonical links, sitemap, mail links), `DISCORD_INVITE_URL` (shown when set), `CONTACT_EMAIL` (privacy page).
+- Never send anything to `pending` rows other than the confirmation mail.

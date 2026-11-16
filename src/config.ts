@@ -9,6 +9,8 @@ export type Config = {
   smtp: { host: string; port: number; secure: boolean; user: string; pass: string; from: string };
   alerts: { email: string | null; discordWebhook: string | null };
   discordWebhooks: Record<string, string>;
+  // Public site settings. publicBaseUrl has no trailing slash and is used for canonical URLs and links in e-mails.
+  site: { publicBaseUrl: string; discordInviteUrl: string | null; contactEmail: string | null };
 };
 
 export class ConfigError extends Error {}
@@ -37,6 +39,15 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const token = (env.STATUS_TOKEN ?? "").trim();
   if (token !== "" && token.length < 24) problems.push("STATUS_TOKEN must be at least 24 characters");
 
+  const publicBaseUrl = (blank(env.PUBLIC_BASE_URL) ? `http://localhost:${port}` : env.PUBLIC_BASE_URL!.trim()).replace(/\/+$/, "");
+  if (!/^https?:\/\/[^\s/]+$/.test(publicBaseUrl)) problems.push("PUBLIC_BASE_URL must look like https://example.com (no path)");
+  const invite = blank(env.DISCORD_INVITE_URL) ? null : env.DISCORD_INVITE_URL!.trim();
+  if (invite !== null && !/^https:\/\/(discord\.gg|discord\.com\/invite)\/[A-Za-z0-9-]+$/.test(invite)) {
+    problems.push("DISCORD_INVITE_URL must look like https://discord.gg/abcdef");
+  }
+  const contact = blank(env.CONTACT_EMAIL) ? null : env.CONTACT_EMAIL!.trim();
+  if (contact !== null && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact)) problems.push("CONTACT_EMAIL is not a valid e-mail address");
+
   if (problems.length > 0) {
     throw new ConfigError(`Cannot start, fix the environment:\n- ${problems.join("\n- ")}`);
   }
@@ -59,6 +70,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       discordWebhook: blank(env.DISCORD_WEBHOOK_ALERTS) ? null : env.DISCORD_WEBHOOK_ALERTS!.trim(),
     },
     discordWebhooks: collectWebhooks(env),
+    site: { publicBaseUrl, discordInviteUrl: invite, contactEmail: contact },
   };
 }
 

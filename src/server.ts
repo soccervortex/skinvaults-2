@@ -7,6 +7,8 @@ import { startJobs, jobStatuses, type Job } from "./platform/jobs.ts";
 import { deliverDue, outboxCounts } from "./platform/outbox.ts";
 import { createSenders } from "./platform/senders.ts";
 import { createAlerter } from "./platform/alerts.ts";
+import { createWeb, notFoundHtml } from "./web/router.ts";
+import { deleteStalePending } from "./waitlist.ts";
 
 const startedAt = Date.now();
 
@@ -42,8 +44,12 @@ async function main(): Promise<void> {
   const senders = createSenders(config);
   const jobs: Job[] = [
     { name: "outbox-delivery", everyMs: 15_000, run: async () => { await deliverDue(pool, senders, alert, log); } },
+    { name: "waitlist-cleanup", everyMs: 6 * 60 * 60_000, run: async () => { await deleteStalePending(pool); } },
   ];
   const handle = await startJobs(pool, jobs, log);
+
+  const site = { baseUrl: config.site.publicBaseUrl, discordInviteUrl: config.site.discordInviteUrl, contactEmail: config.site.contactEmail };
+  const web = createWeb(pool, site);
 
   const server = createServer((req, res) => {
     const url = new URL(req.url ?? "/", "http://localhost");
@@ -60,6 +66,11 @@ async function main(): Promise<void> {
             jobs: await jobStatuses(pool, jobs, Date.now() - startedAt),
             outbox: await outboxCounts(pool),
           });
+        }
+        if (await web.handle(req, res, url)) return;
+        if ((req.headers.accept ?? "").includes("text/html")) {
+          res.writeHead(404, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
+          return void res.end(notFoundHtml(site));
         }
         return fail(res, 404, "not_found", "No such route");
       } catch (err) {
