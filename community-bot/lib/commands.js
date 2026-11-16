@@ -1,4 +1,4 @@
-// Slash commands. Both are owner-only (OWNER_IDS), and the bot only answers inside the configured server.
+// Slash commands. Both are owner-only (the server owner plus OWNER_IDS), and the bot only answers inside the configured server.
 
 import { MessageFlags, PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
 import { postNotice, setupCommunity } from './community.js';
@@ -28,7 +28,7 @@ const cut = (text) => (text.length > 1900 ? `${text.slice(0, 1890)}\n...` : text
 const failureLines = (list) => list.slice(0, 8).map((f) => `- ${f.name}: ${f.error}`).join('\n');
 
 export async function handleCommand(interaction, { cfg, store, botId, log }) {
-  if (!cfg.ownerIds.includes(interaction.user.id)) return interaction.reply({ content: 'Only the SkinVaults owners can use this.', flags: EPH });
+  if (!cfg.ownerIds.includes(interaction.user.id) && interaction.guild?.ownerId !== interaction.user.id) return interaction.reply({ content: 'Only the SkinVaults owners can use this.', flags: EPH });
   const sub = interaction.options.getSubcommand();
   await interaction.deferReply({ flags: EPH });
   const guild = interaction.guild;

@@ -1,4 +1,4 @@
-# Community message for the SkinVaults Discord (DRAFT, not sent)
+# Community message for the SkinVaults Discord (posted 2026-11-16 in #announcements of the "SkinVaults 2.0" category)
 
 Post this in the announcements channel of the "SkinVaults 2.0" category. The feedback channel next to it has the buttons
 that open a private ticket, so the message points people there.

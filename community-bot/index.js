@@ -25,8 +25,11 @@ client.once(Events.ClientReady, async (c) => {
     log(`the bot is not in server ${cfg.guildId}; invite it first`);
     process.exit(1);
   }
-  // Server-scoped commands only: this never touches global commands or other servers.
-  await guild.commands.set(commandDefinitions);
+  // The server owner always counts as an owner, so lockdown keeps them in and tickets show them.
+  if (guild.ownerId && !cfg.ownerIds.includes(guild.ownerId)) cfg.ownerIds.push(guild.ownerId);
+  // This bot shares its token with the older SkinVaults bot, so only our own commands are created or updated.
+  // Never use commands.set() here: it would delete every command the other bot registered in this server.
+  for (const definition of commandDefinitions) await guild.commands.create(definition);
   log(`ready as ${c.user.tag}; commands registered; lockdown active: ${store.state().lockdown?.active ?? false}`);
 });
 

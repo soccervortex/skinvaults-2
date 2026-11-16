@@ -196,7 +196,7 @@ test('community channels and open tickets are never touched', async () => {
 });
 
 test('config names every missing or malformed variable', () => {
-  assert.throws(() => loadBotConfig({}), /DISCORD_BOT_TOKEN is missing[\s\S]*DISCORD_GUILD_ID is missing[\s\S]*OWNER_IDS is missing/);
+  assert.throws(() => loadBotConfig({}), /DISCORD_BOT_TOKEN is missing[\s\S]*DISCORD_GUILD_ID is missing/);
   assert.throws(() => loadBotConfig({ DISCORD_BOT_TOKEN: 'x', DISCORD_GUILD_ID: '123', OWNER_IDS: 'abc' }), /not a Discord id/);
   const ok = loadBotConfig({ DISCORD_BOT_TOKEN: 'x', DISCORD_GUILD_ID: GUILD, OWNER_IDS: `${OWNER}, ${BOT}` });
   assert.deepEqual(ok.ownerIds, [OWNER, BOT]);

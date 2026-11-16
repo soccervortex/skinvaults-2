@@ -8,12 +8,12 @@ A small Discord bot (discord.js 14) for the SkinVaults server. It does two thing
    (suggest an idea, add a feature, remove a feature, something else). A button opens a short form, and the form opens a
    private channel that only the member and the team can see.
 
-It runs in **one** server (`DISCORD_GUILD_ID`) and only owners (`OWNER_IDS`) can use the commands.
-It does not read the old bot's database and does not share a token with it.
+It runs in **one** server (`DISCORD_GUILD_ID`) and only owners can use the commands: the server owner, plus anyone in the optional `OWNER_IDS`.
+It does not read the old bot's database. It runs on the token of the existing SkinVaults bot and only creates or updates its own two commands; it never removes the old bot's commands.
 
 ## Setup
 
-1. Discord developer portal: create a new application and bot. Copy the token (never paste it into chat or a file in git).
+1. Use the existing SkinVaults bot application (token stays in the Nebula environment, never in chat or git).
    Invite it with the scopes `bot` and `applications.commands`. Give it these permissions: Manage Channels, Manage Roles,
    View Channels, Send Messages, Embed Links, Attach Files, Read Message History, Mention Everyone (only if you want `@everyone` pings).
 2. Move the bot's role **above** the roles it has to manage, in Server Settings > Roles. Without this it cannot edit those channels.

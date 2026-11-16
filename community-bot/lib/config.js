@@ -21,7 +21,8 @@ export function loadBotConfig(env) {
 
   const token = need('DISCORD_BOT_TOKEN');
   const guildId = ids('DISCORD_GUILD_ID', true)[0] ?? '';
-  const ownerIds = ids('OWNER_IDS', true);
+  // Optional: the server owner is always allowed, OWNER_IDS adds more people.
+  const ownerIds = ids('OWNER_IDS', false);
   const staffRoleIds = ids('STAFF_ROLE_IDS', false);
 
   if (problems.length > 0) throw new Error(`Bot configuration is not valid:\n - ${problems.join('\n - ')}`);
