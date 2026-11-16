@@ -123,8 +123,7 @@ export function privacyPage(site: SiteInfo): Page {
 <h2>Your rights</h2>
 <p>Every mail contains a link that deletes your address at once. You can also ask to see or remove your data: ${contact}.</p>
 <h2>Who sees it</h2>
-<p>Only us. The address lives in our own database and mails go out through our mail provider. We do not sell or share it.</p>
-<p class="hint">Draft: the owner still has to add the company name and registration details here before launch.</p>`),
+<p>Only us. The address lives in our own database and mails go out through our mail provider. We do not sell or share it.</p>`),
   };
 }
 
