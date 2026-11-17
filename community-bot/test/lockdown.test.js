@@ -5,8 +5,9 @@ import path from 'node:path';
 import test from 'node:test';
 import { PermissionFlagsBits } from 'discord.js';
 import { loadBotConfig } from '../lib/config.js';
-import { disableLockdown, enableLockdown, planLockdown, readOverwrites } from '../lib/lockdown.js';
+import { disableLockdown, enableLockdown, planLockdown, readOverwrites, retryLockdown } from '../lib/lockdown.js';
 import * as P from '../lib/permissions.js';
+import { canView, pauseOnboarding, pauseRulesChannel, resumeOnboarding, resumeRulesChannel, simulateVisibility } from '../lib/readiness.js';
 import { Store } from '../lib/store.js';
 
 const GUILD = '100000000000000001';
@@ -201,4 +202,164 @@ test('config names every missing or malformed variable', () => {
   const ok = loadBotConfig({ DISCORD_BOT_TOKEN: 'x', DISCORD_GUILD_ID: GUILD, OWNER_IDS: `${OWNER}, ${BOT}` });
   assert.deepEqual(ok.ownerIds, [OWNER, BOT]);
   assert.equal(ok.messageContent, false);
+});
+
+// ---- readiness ----------------------------------------------------------------------------------------------------
+
+
+const ADMIN_BIT = 1n << 3n;
+const mkRole = (id, name, permissions) => ({ id, name, permissions, managed: false, position: 1 });
+const ch = (id, name, overwrites = [], type = 0) => ({ id, name, type, parentId: null, overwrites });
+const ow = (id, type, allow = 0n, deny = 0n) => ({ id, type, allow, deny });
+const VERIFIED = '100000000000000006';
+
+test('canView follows Discord order: everyone, roles, member, and Administrator sees all', () => {
+  const roles = [mkRole(GUILD, '@everyone', P.VIEW_CHANNEL), mkRole(MEMBERS, 'Members', 0n), mkRole(STAFF, 'Admin', ADMIN_BIT)];
+  const hidden = ch('c1', 'secret', [ow(GUILD, P.ROLE, 0n, P.VIEW_CHANNEL)]);
+  assert.equal(canView({ channel: hidden, roles, memberRoleIds: [], everyoneId: GUILD }), false);
+  assert.equal(canView({ channel: hidden, roles, memberRoleIds: [STAFF], everyoneId: GUILD }), true);
+  const roleAllowed = ch('c2', 'vip', [ow(GUILD, P.ROLE, 0n, P.VIEW_CHANNEL), ow(MEMBERS, P.ROLE, P.VIEW_CHANNEL, 0n)]);
+  assert.equal(canView({ channel: roleAllowed, roles, memberRoleIds: [MEMBERS], everyoneId: GUILD }), true);
+  assert.equal(canView({ channel: roleAllowed, roles, memberRoleIds: [], everyoneId: GUILD }), false);
+  const own = ch('c3', 'ticket', [ow(GUILD, P.ROLE, 0n, P.VIEW_CHANNEL), ow('42', P.MEMBER, P.VIEW_CHANNEL, 0n)]);
+  assert.equal(canView({ channel: own, roles, memberRoleIds: [], everyoneId: GUILD, memberId: '42' }), true);
+  assert.equal(canView({ channel: own, roles, memberRoleIds: [], everyoneId: GUILD, memberId: '43' }), false);
+});
+
+test('simulated lockdown leaves only the allowed channels, and reports what stays open', () => {
+  const roles = [mkRole(GUILD, '@everyone', P.VIEW_CHANNEL), mkRole(MEMBERS, 'Members', P.VIEW_CHANNEL), mkRole(STAFF, 'Admin', ADMIN_BIT)];
+  const channels = [
+    ch('pub', 'announcements', [ow(GUILD, P.ROLE, P.VIEW_CHANNEL, P.SEND_MESSAGES)]),
+    ch('general', 'general', [ow(MEMBERS, P.ROLE, P.VIEW_CHANNEL, 0n)]),
+    ch('rules', 'rules', []),
+  ];
+  const keep = { everyoneId: GUILD, keepRoleIds: [VERIFIED], keepMemberIds: [OWNER] };
+  const common = { channels, roles, everyoneId: GUILD, allowedIds: new Set(['pub']), leaveAlone: new Set(['pub']), keep };
+  const before = simulateVisibility({ ...common, applyLock: false });
+  assert.deepEqual(before.groups.find((g) => g.label === 'Members').sees.map((c) => c.name), ['general', 'rules']);
+  const after = simulateVisibility({ ...common, applyLock: true });
+  for (const g of after.groups) assert.deepEqual(g.sees, [], g.label);
+  assert.deepEqual(after.adminRoles, ['Admin']);
+});
+
+function fakeRestGuild(initial) {
+  let enabled = initial;
+  const calls = [];
+  return {
+    calls,
+    id: GUILD,
+    client: { rest: {
+      async get() { return { enabled }; },
+      async put(_route, opts) { calls.push(opts.body); enabled = opts.body.enabled; return {}; },
+    } },
+  };
+}
+
+test('onboarding is switched off once, remembered, and switched back on by lockdown off', async () => {
+  const store = tmpStore();
+  const guild = fakeRestGuild(true);
+  const log = () => {};
+  assert.deepEqual(await pauseOnboarding({ guild, store, log }), { changed: true });
+  assert.deepEqual(guild.calls, [{ enabled: false }]);
+  assert.equal(store.state().onboarding.previouslyEnabled, true);
+  // second prepare while it is already off must not forget the first answer
+  assert.deepEqual(await pauseOnboarding({ guild, store, log }), { changed: false });
+  assert.equal(store.state().onboarding.previouslyEnabled, true);
+  assert.match(await resumeOnboarding({ guild, store, log }), /switched back on/);
+  assert.deepEqual(guild.calls.at(-1), { enabled: true });
+  assert.equal(store.state().onboarding, undefined);
+  assert.equal(await resumeOnboarding({ guild, store, log }), null);
+});
+
+test('onboarding that was already off stays off', async () => {
+  const store = tmpStore();
+  const guild = fakeRestGuild(false);
+  assert.deepEqual(await pauseOnboarding({ guild, store, log: () => {} }), { changed: false });
+  assert.equal(await resumeOnboarding({ guild, store, log: () => {} }), null);
+  assert.deepEqual(guild.calls, []);
+});
+
+test('retry locks what failed the first time, and off still restores the original exactly', async () => {
+  const opts = { failSet: true };
+  const stubborn = fakeChannel('200000000000000010', 'stubborn', [{ id: MEMBERS, type: P.ROLE, allow: P.VIEW_CHANNEL, deny: 0n }], opts);
+  const guild = sampleGuild({ channels: [stubborn] });
+  const store = tmpStore();
+  const original = snapshotOf(guild);
+  const on = await enableLockdown({ guild, cfg, store, botId: BOT, startedBy: OWNER, log: () => {} });
+  assert.equal(on.failures.length, 1);
+  assert.equal(store.state().lockdown.failures.length, 1);
+
+  opts.failSet = false;
+  const again = await retryLockdown({ guild, cfg, store, botId: BOT, log: () => {} });
+  assert.equal(again.changed, 1);
+  assert.equal(again.failures.length, 0);
+  assert.equal(store.state().lockdown.failures.length, 0);
+  const everyone = readOverwrites(stubborn).find((o) => o.id === GUILD);
+  assert.ok(everyone.deny & P.VIEW_CHANNEL);
+  assert.equal(readOverwrites(stubborn).find((o) => o.id === MEMBERS).allow & P.VIEW_CHANNEL, 0n);
+
+  const off = await disableLockdown({ guild, store, log: () => {} });
+  assert.equal(off.failures.length, 0);
+  assert.equal(snapshotOf(guild), original);
+});
+
+test('retry refuses when no lockdown is active', async () => {
+  await assert.rejects(retryLockdown({ guild: sampleGuild(), cfg, store: tmpStore(), botId: BOT, log: () => {} }), /not active/);
+});
+
+test('the rules channel is pointed at the public channel once and put back by lockdown off', async () => {
+  const store = tmpStore();
+  const patches = [];
+  let rules = '300000000000000001';
+  const guild = {
+    id: GUILD,
+    client: { rest: {
+      async get() { return { rules_channel_id: rules }; },
+      async patch(_route, opts) { patches.push(opts.body); rules = opts.body.rules_channel_id; return {}; },
+    } },
+  };
+  const log = () => {};
+  assert.deepEqual(await pauseRulesChannel({ guild, store, publicChannelId: '300000000000000002', log }), { changed: true });
+  assert.deepEqual(await pauseRulesChannel({ guild, store, publicChannelId: '300000000000000002', log }), { changed: false });
+  assert.equal(store.state().rulesChannel.previousId, '300000000000000001', 'second prepare must not overwrite the memory');
+  assert.match(await resumeRulesChannel({ guild, store, log }), /back where it was/);
+  assert.equal(rules, '300000000000000001');
+  assert.equal(store.state().rulesChannel, undefined);
+  assert.equal(await resumeRulesChannel({ guild, store, log }), null);
+  assert.equal(patches.length, 2);
+});
+
+test('a channel discord.js does not know (server-hub) is locked over REST and restored exactly', async () => {
+  const hub = { id: '400000000000000001', name: 'server-hub', type: 20, permission_overwrites: [] };
+  const rest = {
+    async get(route) {
+      if (route === `/guilds/${GUILD}/channels`) return [{ ...hub }];
+      if (route === `/channels/${hub.id}`) return { ...hub };
+      throw new Error(`unexpected GET ${route}`);
+    },
+    async put(route, opts) {
+      const owner = route.split('/').pop();
+      const next = hub.permission_overwrites.filter((o) => o.id !== owner);
+      next.push({ id: owner, type: opts.body.type, allow: opts.body.allow, deny: opts.body.deny });
+      hub.permission_overwrites = next;
+    },
+    async delete(route) {
+      const owner = route.split('/').pop();
+      hub.permission_overwrites = hub.permission_overwrites.filter((o) => o.id !== owner);
+    },
+  };
+  const guild = sampleGuild();
+  guild.client = { rest };
+  guild.channels.cache = new Map([...guild.map.keys()].map((k) => [k, true]));
+  const store = tmpStore();
+  const on = await enableLockdown({ guild, cfg, store, botId: BOT, startedBy: OWNER, log: () => {} });
+  assert.equal(on.failures.length, 0);
+  const everyone = hub.permission_overwrites.find((o) => o.id === GUILD);
+  assert.ok(BigInt(everyone.deny) & P.VIEW_CHANNEL, 'hub hidden from everyone');
+  assert.deepEqual(store.state().lockdown.raw[hub.id], [], 'the original (empty) overwrites are remembered');
+
+  const off = await disableLockdown({ guild, store, log: () => {} });
+  assert.equal(off.failures.length, 0);
+  assert.deepEqual(hub.permission_overwrites, [], 'back to exactly no overwrites');
+  assert.equal(store.state().lockdown.active, false);
 });

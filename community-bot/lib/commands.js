@@ -3,7 +3,8 @@
 import { MessageFlags, PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
 import { postNotice, setupCommunity } from './community.js';
 import { postPanel } from './feedback.js';
-import { disableLockdown, enableLockdown, managedChannelIds, planLockdown } from './lockdown.js';
+import { disableLockdown, enableLockdown, managedChannelIds, planLockdown, retryLockdown } from './lockdown.js';
+import { analyseReadiness, pauseOnboarding, pauseRulesChannel, renderReport } from './readiness.js';
 
 const EPH = MessageFlags.Ephemeral;
 const pingOption = (o) => o.setName('ping').setDescription('Tag people in the announcement (default: nobody)')
@@ -15,9 +16,13 @@ export const commandDefinitions = [
     .addSubcommand((s) => s.setName('preview').setDescription('Show what would change. Changes nothing.'))
     .addSubcommand((s) => s.setName('on').setDescription('Save the current setup, then lock the server')
       .addBooleanOption((o) => o.setName('confirm').setDescription('Set to true to really lock the server').setRequired(true))
-      .addStringOption(pingOption))
+      .addStringOption(pingOption)
+      .addBooleanOption((o) => o.setName('force').setDescription('Lock even when /lockdown check still lists problems')))
     .addSubcommand((s) => s.setName('off').setDescription('Restore the saved setup exactly as it was').addStringOption(pingOption))
-    .addSubcommand((s) => s.setName('status').setDescription('Show whether the server is locked')),
+    .addSubcommand((s) => s.setName('status').setDescription('Show whether the server is locked'))
+    .addSubcommand((s) => s.setName('check').setDescription('Check what is in the way and what members would see. Changes nothing.'))
+    .addSubcommand((s) => s.setName('prepare').setDescription('Do what the bot can: community channels, Onboarding off, rules channel moved'))
+    .addSubcommand((s) => s.setName('retry').setDescription('While locked: lock the channels that are still open, for example after fixing the Server Guide')),
   new SlashCommandBuilder().setName('community').setDescription('SkinVaults 2.0 community channels')
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addSubcommand((s) => s.setName('setup').setDescription('Create the category, channels and the feedback panel (safe to run again)'))
@@ -50,6 +55,31 @@ export async function handleCommand(interaction, { cfg, store, botId, log }) {
         : `Lockdown is off.${l.lastRestoredAt ? ` Last restored ${l.lastRestoredAt}.` : ''}`);
     }
 
+    if (sub === 'check') return interaction.editReply(cut(renderReport(await analyseReadiness({ guild, state, cfg, botId }))));
+
+    if (sub === 'prepare') {
+      const made = await setupCommunity({ guild, cfg, store, botId });
+      const paused = await pauseOnboarding({ guild, store, log });
+      const rules = await pauseRulesChannel({ guild, store, publicChannelId: made.announcements.id, log });
+      const report = await analyseReadiness({ guild, state: store.state(), cfg, botId });
+      return interaction.editReply(cut([
+        `Done by the bot: community channels ${made.created.length ? `created (${made.created.join(', ')})` : 'were already in place'}; Onboarding ${paused.changed ? 'switched off for the lockdown' : 'was already off'}; rules channel ${rules.changed ? 'pointed at the announcements' : 'needed no change'}.`,
+        '',
+        renderReport(report),
+      ].join('\n')));
+    }
+
+    if (sub === 'retry') {
+      const result = await retryLockdown({ guild, cfg, store, botId, log });
+      const report = await analyseReadiness({ guild, state: store.state(), cfg, botId });
+      return interaction.editReply(cut([
+        `Locked ${result.changed} more channel(s).`,
+        result.failures.length ? `Still failing:\n${failureLines(result.failures)}` : 'No errors.',
+        '',
+        renderReport(report),
+      ].join('\n')));
+    }
+
     if (sub === 'preview') {
       if (!state.community.feedbackId) return interaction.editReply('Run /community setup first, so the public channels exist before anything is hidden.');
       const plan = await planLockdown(guild, cfg, state, botId);
@@ -66,6 +96,10 @@ export async function handleCommand(interaction, { cfg, store, botId, log }) {
     if (sub === 'on') {
       if (!interaction.options.getBoolean('confirm')) return interaction.editReply('Not confirmed, nothing changed.');
       if (!state.community.feedbackId) return interaction.editReply('Run /community setup first, so the public channels exist before anything is hidden.');
+      if (!interaction.options.getBoolean('force')) {
+        const report = await analyseReadiness({ guild, state, cfg, botId });
+        if (!report.ok) return interaction.editReply(cut(`Nothing was changed, because something is in the way:\n\n${renderReport(report)}\n\nFix that (/lockdown prepare does what the bot can), or run again with force: true.`));
+      }
       const result = await enableLockdown({ guild, cfg, store, botId, startedBy: interaction.user.id, log });
       const feedback = await guild.channels.fetch(state.community.feedbackId);
       await postNotice(feedback, {
@@ -90,6 +124,7 @@ export async function handleCommand(interaction, { cfg, store, botId, log }) {
         `Restored ${result.restored} of ${result.total} channels from ${result.snapshotFile}.`,
         result.missing.length ? `Deleted since the snapshot (not recreated): ${result.missing.join(', ')}.` : '',
         result.failures.length ? `Still wrong:\n${failureLines(result.failures)}\nRun /lockdown off again after fixing.` : 'Everything matches the saved setup.',
+        result.onboarding ?? '',
       ].filter(Boolean).join('\n')));
     }
   } catch (err) {

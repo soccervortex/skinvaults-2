@@ -3,8 +3,10 @@
 // lockdown is refused while one is active, so the snapshot can never be taken from an already locked server.
 
 import fs from 'node:fs';
+import { Routes } from 'discord.js';
 import path from 'node:path';
 import { diffOverwrites, lockedOverwrites, parseOverwrites, serializeOverwrites } from './permissions.js';
+import { resumeOnboarding, resumeRulesChannel } from './readiness.js';
 
 const ADMINISTRATOR = 1n << 3n;
 
@@ -56,6 +58,71 @@ export async function planLockdown(guild, cfg, state, botId) {
   return { items, blocked, warnings };
 }
 
+
+// Channels discord.js does not know (for example Discord's own "server-hub") are not in the guild cache, so they are
+// handled over the REST API. Their original overwrites are kept in state.lockdown.raw and put back by /lockdown off.
+const rawKey = (o) => `${o.type}:${o.id}`;
+const parseRawOverwrites = (list) => (list ?? []).map((o) => ({ id: o.id, type: o.type, allow: BigInt(o.allow), deny: BigInt(o.deny) }));
+
+async function setOverwritesRaw(rest, channelId, wanted, current) {
+  const want = new Map(wanted.map((o) => [rawKey(o), o]));
+  for (const o of current) if (!want.has(rawKey(o))) await rest.delete(Routes.channelPermission(channelId, o.id));
+  for (const o of wanted) {
+    const cur = current.find((c) => rawKey(c) === rawKey(o));
+    if (cur && cur.allow === o.allow && cur.deny === o.deny) continue;
+    await rest.put(Routes.channelPermission(channelId, o.id), { body: { type: o.type, allow: o.allow.toString(), deny: o.deny.toString() } });
+  }
+}
+
+async function lockUncached({ guild, cfg, store, botId }) {
+  const rest = guild.client?.rest;
+  if (!rest) return { changed: 0, failures: [] };
+  const state = store.state();
+  const keep = who(guild, cfg, botId);
+  const skip = managedChannelIds(state);
+  const known = new Set(guild.channels.cache?.keys?.() ?? []);
+  const saved = (state.lockdown.raw ??= {});
+  const failures = [];
+  let changed = 0;
+  for (const raw of await rest.get(Routes.guildChannels(guild.id))) {
+    if (known.has(raw.id) || skip.has(raw.id)) continue;
+    const current = parseRawOverwrites(raw.permission_overwrites);
+    if (!saved[raw.id]) {
+      saved[raw.id] = serializeOverwrites(current);
+      store.saveState(state);
+    }
+    const after = lockedOverwrites(parseOverwrites(saved[raw.id]), keep);
+    if (diffOverwrites(current, after).length === 0) continue;
+    try {
+      await setOverwritesRaw(rest, raw.id, after, current);
+      changed += 1;
+    } catch (err) {
+      failures.push({ id: raw.id, name: raw.name ?? raw.id, error: String(err.message ?? err).slice(0, 200) });
+    }
+  }
+  return { changed, failures };
+}
+
+async function restoreUncached({ guild, state }) {
+  const rest = guild.client?.rest;
+  const failures = [];
+  let restored = 0;
+  if (!rest) return { restored, failures };
+  for (const [id, list] of Object.entries(state.lockdown?.raw ?? {})) {
+    try {
+      const live = await rest.get(Routes.channel(id));
+      const wanted = parseOverwrites(list);
+      const current = parseRawOverwrites(live.permission_overwrites);
+      if (diffOverwrites(wanted, current).length === 0) continue;
+      await setOverwritesRaw(rest, id, wanted, current);
+      restored += 1;
+    } catch (err) {
+      failures.push({ id, name: id, error: String(err.message ?? err).slice(0, 200) });
+    }
+  }
+  return { restored, failures };
+}
+
 export function snapshotFileName(now = new Date()) {
   return `snapshots/${now.toISOString().replace(/[:.]/g, '-')}.json`;
 }
@@ -100,6 +167,10 @@ export async function enableLockdown({ guild, cfg, store, botId, startedBy, log 
       failures.push({ id: item.channel.id, name: item.channel.name, error: String(err.message ?? err).slice(0, 200) });
     }
   }
+  const extra = await lockUncached({ guild, cfg, store, botId });
+  failures.push(...extra.failures);
+  changed += extra.changed;
+  state.lockdown = store.state().lockdown;
   state.lockdown.phase = 'locked';
   state.lockdown.failures = failures;
   store.saveState(state);
@@ -142,6 +213,10 @@ export async function disableLockdown({ guild, store, log }) {
     }
   }
 
+  const extra = await restoreUncached({ guild, state });
+  restored += extra.restored;
+  failures.push(...extra.failures);
+
   if (failures.length === 0) {
     state.lockdown = { active: false, lastRestoredAt: new Date().toISOString(), snapshotFile: file };
   } else {
@@ -150,7 +225,58 @@ export async function disableLockdown({ guild, store, log }) {
   }
   store.saveState(state);
   log(`lockdown off: ${restored} channels restored, ${missing.length} deleted since, ${failures.length} failed`);
-  return { snapshotFile: file, total: snapshot.channels.length, restored, missing, failures };
+  const settings = [];
+  if (failures.length === 0 && guild.client?.rest) {
+    settings.push(await resumeOnboarding({ guild, store, log }), await resumeRulesChannel({ guild, store, log }));
+  }
+  const onboarding = settings.filter(Boolean).join(' ') || null;
+  return { snapshotFile: file, total: snapshot.channels.length, restored, missing, failures, onboarding };
+}
+
+/**
+ * Locks again what is still open while a lockdown is active (for example channels Discord refused the first time).
+ * The snapshot is never rewritten, so /lockdown off still restores the original setup. Channels created after the
+ * snapshot are left alone because there is nothing to restore them to.
+ */
+export async function retryLockdown({ guild, cfg, store, botId, log }) {
+  const state = store.state();
+  if (!state.lockdown?.active) throw new Error('Lockdown is not active. Use /lockdown on first.');
+  const snapshot = store.read(state.lockdown.snapshotFile, null);
+  if (!snapshot || snapshot.guildId !== guild.id) throw new Error(`Snapshot ${state.lockdown.snapshotFile} is missing, so nothing was changed.`);
+  const skip = managedChannelIds(state);
+  const keep = who(guild, cfg, botId);
+  const failures = [];
+  let changed = 0;
+  for (const saved of snapshot.channels) {
+    if (skip.has(saved.id)) continue;
+    let live = null;
+    try {
+      live = await guild.channels.fetch(saved.id, { force: true });
+    } catch {
+      continue;
+    }
+    if (!live?.manageable) {
+      failures.push({ id: saved.id, name: saved.name, error: 'the bot cannot edit this channel' });
+      continue;
+    }
+    const before = readOverwrites(live);
+    const after = lockedOverwrites(before, keep);
+    if (diffOverwrites(before, after).length === 0) continue;
+    try {
+      await live.permissionOverwrites.set(after, 'SkinVaults lockdown (retry)');
+      changed += 1;
+    } catch (err) {
+      failures.push({ id: saved.id, name: saved.name, error: String(err.message ?? err).slice(0, 200) });
+    }
+  }
+  const extra = await lockUncached({ guild, cfg, store, botId });
+  failures.push(...extra.failures);
+  changed += extra.changed;
+  state.lockdown = store.state().lockdown;
+  state.lockdown.failures = failures;
+  store.saveState(state);
+  log(`lockdown retry: ${changed} channels locked, ${failures.length} still failing`);
+  return { changed, failures };
 }
 
 export function listSnapshots(store) {

@@ -1,4 +1,5 @@
 import { Client, Events, GatewayIntentBits } from 'discord.js';
+import { giveRole, startSweep } from './lib/autorole.js';
 import { commandDefinitions, handleCommand } from './lib/commands.js';
 import { loadBotConfig } from './lib/config.js';
 import { handleButton, handleModal } from './lib/feedback.js';
@@ -17,6 +18,7 @@ try {
 const store = new Store(cfg.dataDir);
 const intents = [GatewayIntentBits.Guilds];
 if (cfg.messageContent) intents.push(GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent);
+if (cfg.memberRoleId) intents.push(GatewayIntentBits.GuildMembers);
 const client = new Client({ intents });
 
 client.once(Events.ClientReady, async (c) => {
@@ -30,8 +32,19 @@ client.once(Events.ClientReady, async (c) => {
   // This bot shares its token with the older SkinVaults bot, so only our own commands are created or updated.
   // Never use commands.set() here: it would delete every command the other bot registered in this server.
   for (const definition of commandDefinitions) await guild.commands.create(definition);
+  if (cfg.memberRoleId) startSweep(guild, cfg.memberRoleId, log);
   log(`ready as ${c.user.tag}; commands registered; lockdown active: ${store.state().lockdown?.active ?? false}`);
 });
+
+if (cfg.memberRoleId) {
+  client.on(Events.GuildMemberAdd, async (member) => {
+    if (member.guild.id === cfg.guildId && await giveRole(member, cfg.memberRoleId, log, 'SkinVaults member role on join')) log(`member role given to ${member.id} on join`);
+  });
+  // Members who were in screening get the role as soon as they pass it.
+  client.on(Events.GuildMemberUpdate, async (before, member) => {
+    if (member.guild.id === cfg.guildId && before.pending && !member.pending) await giveRole(member, cfg.memberRoleId, log, 'SkinVaults member role after screening');
+  });
+}
 
 client.on(Events.InteractionCreate, async (interaction) => {
   if (interaction.guildId !== cfg.guildId) return;

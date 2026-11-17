@@ -26,9 +26,14 @@ It does not read the old bot's database. It runs on the token of the existing Sk
 |---|---|
 | `/community setup` | Creates the category, `announcements`, `chat`, `feedback`, a staff-only `feedback-log` and a hidden ticket category. Posts the feedback panel. Safe to run again. |
 | `/lockdown preview` | Lists what would change. Changes nothing. Warns about roles with Administrator (they still see everything) and the rules channel (Discord may insist it stays visible). |
-| `/lockdown on confirm:true ping:...` | Saves a snapshot to `DATA_DIR/snapshots/`, reads it back, then locks. Posts a notice in `#feedback`. `ping` is `nobody` (default), `@here` or `@everyone`. |
-| `/lockdown off ping:...` | Restores every channel from the snapshot, re-reads each one from Discord and compares. Posts "server is open again" in `#announcements`. |
+| `/lockdown check` | Read-only. Lists what is in the way (Server Guide, Onboarding, channels that would stay visible), marks each as `[bot]` (the bot can fix it) or `[you]` (only a person can), and shows what members without any role would see. |
+| `/lockdown prepare` | Does what the bot may do: creates missing community channels and switches Onboarding off and points the Community rules channel at `#announcements` (it remembers both, `/lockdown off` puts them back). Then runs the check. |
+| `/lockdown on confirm:true ping:... force:...` | Runs the check first and refuses if something is in the way (`force:true` overrides). Saves a snapshot to `DATA_DIR/snapshots/`, reads it back, then locks. Posts a notice in `#feedback`. `ping` is `nobody` (default), `@here` or `@everyone`. |
+| `/lockdown retry` | While locked: locks the channels that are still open, for example after the Server Guide was changed. The snapshot is not rewritten. |
+| `/lockdown off ping:...` | Restores every channel from the snapshot, re-reads each one from Discord and compares. Posts "server is open again" in `#announcements`. Switches Onboarding back on if `/lockdown prepare` had switched it off. |
 | `/lockdown status` | Shows whether the server is locked and any channels that failed. |
+
+Things a bot cannot do (Discord refuses, 403): change the **Server Guide**. Channels the Server Guide points at (for example welcome, announcements, faq) stay visible to everyone until a person replaces those actions in Server Settings > Server Guide. Members with Administrator (Owner, Admin, bots) always see everything, so test with "View server as role" > Member.
 
 Safety rules built in:
 - The snapshot is written to disk and read back **before** the first change. If that fails, nothing changes.
@@ -37,6 +42,10 @@ Safety rules built in:
 - If a restore does not match the snapshot, the lockdown stays marked active and the mismatching channels are listed. Run `/lockdown off` again.
 - Channels created during lockdown are left alone. Channels deleted during lockdown are reported, not recreated.
 - Staff roles, the owners and the bot keep seeing everything while locked.
+
+## Member role
+
+Set `MEMBER_ROLE_ID` and the bot gives that role to every human member: immediately when they join (or when they pass membership screening), once at startup for anyone who joined while the bot was offline, and again every 5 minutes for anyone still missing it. Bots are skipped. The bot needs the **Server Members** intent (Developer Portal > Bot > Privileged Gateway Intents) and its own role must sit above the member role; if not, the log says so. Leave `MEMBER_ROLE_ID` empty to switch the feature off.
 
 ## Data
 

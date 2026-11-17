@@ -24,6 +24,7 @@ export function loadBotConfig(env) {
   // Optional: the server owner is always allowed, OWNER_IDS adds more people.
   const ownerIds = ids('OWNER_IDS', false);
   const staffRoleIds = ids('STAFF_ROLE_IDS', false);
+  const memberRoleId = ids('MEMBER_ROLE_ID', false)[0] ?? '';
 
   if (problems.length > 0) throw new Error(`Bot configuration is not valid:\n - ${problems.join('\n - ')}`);
 
@@ -32,6 +33,8 @@ export function loadBotConfig(env) {
     guildId,
     ownerIds,
     staffRoleIds,
+    // When set, every human member gets this role (needs the Server Members intent in the developer portal).
+    memberRoleId,
     // Reading message text needs the privileged Message Content intent, which must be switched on in the developer portal first.
     messageContent: env.ENABLE_MESSAGE_CONTENT === '1',
     dataDir: (env.DATA_DIR ?? './data').trim() || './data',
