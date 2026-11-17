@@ -183,7 +183,15 @@ waitlist e-mails are stored (our Postgres, deleted on request).
 **Target: Friday 29 January 2027. Reserve: Friday 12 February 2027.** Publicly we say "target", never "promise". The date moves when a criterion below is not met; it never moves because we are in a hurry.
 
 ### Planned launch features
-Hook: inventory with value, float, seed and stickers, plus inspect-link lookup (float and seed come from Steam's inventory JSON, prices from SkinAPI, see `decisions.md`). Core: price compare, alerts, wishlist, guides and blog. After launch: deals, trade-up calculator. Undecided: giveaways, what credits can be spent on, Pro.
+Hook: inventory with value, float, seed and stickers, plus inspect-link lookup (float and seed come from Steam's inventory JSON, prices from SkinAPI, see `decisions.md`).
+Core: price compare, alerts, wishlist, guides and blog.
+Parts that belong to those and must exist at launch:
+1. **One page per skin** with the price per marketplace and a price history chart (SkinAPI `history`). This is the base for Google ranking.
+2. **Search** by skin name.
+3. **Profile page after Steam sign-in**: credit balance, wishlist, alerts, inventory.
+4. **A minimal "my prizes" view** so the open prize claims from 1.0 can still be claimed (`promises.md`), whether or not giveaways return.
+Optional, only if the schedule holds: a **shareable inventory link** (value and lowest floats). Otherwise after launch.
+After launch: deals, trade-up calculator. Undecided: giveaways, what credits can be spent on, Pro.
 
 ### Schedule
 | Period | Work |
