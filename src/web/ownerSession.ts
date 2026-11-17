@@ -42,6 +42,9 @@ export function readCookie(header: string | undefined, name: string): string | u
   return undefined;
 }
 
+export function setCookie(name: string, value: string, secure: boolean, maxAgeSeconds: number): string {
+  return `${name}=${value}; Path=/; Max-Age=${maxAgeSeconds}; HttpOnly; SameSite=Lax${secure ? "; Secure" : ""}`;
+}
 export function sessionCookie(value: string, secure: boolean, maxAgeSeconds: number): string {
-  return `${cookieName(secure)}=${value}; Path=/; Max-Age=${maxAgeSeconds}; HttpOnly; SameSite=Lax${secure ? "; Secure" : ""}`;
+  return setCookie(cookieName(secure), value, secure, maxAgeSeconds);
 }

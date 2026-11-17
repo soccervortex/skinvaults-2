@@ -16,6 +16,8 @@ export type Config = {
   site: { publicBaseUrl: string; discordInviteUrl: string | null; contactEmail: string | null };
   // Owner and co-owner sign-in. null (feature off) unless at least one password hash is set.
   owners: OwnerAuth | null;
+  // Price service. null (no prices, inventory still works) unless SKINAPI_KEY is set.
+  skinApi: { baseUrl: string; key: string } | null;
 };
 
 export class ConfigError extends Error {}
@@ -54,6 +56,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   if (contact !== null && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact)) problems.push("CONTACT_EMAIL is not a valid e-mail address");
 
   const owners = readOwners(env, problems);
+  const skinApi = readSkinApi(env, problems);
 
   if (problems.length > 0) {
     throw new ConfigError(`Cannot start, fix the environment:\n- ${problems.join("\n- ")}`);
@@ -79,6 +82,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     discordWebhooks: collectWebhooks(env),
     site: { publicBaseUrl, discordInviteUrl: invite, contactEmail: contact },
     owners,
+    skinApi,
   };
 }
 
@@ -97,6 +101,14 @@ function readOwners(env: NodeJS.ProcessEnv, problems: string[]): OwnerAuth | nul
   if (secret.length < 32) problems.push("SESSION_SECRET must be at least 32 characters when an owner password hash is set");
   const version = (env.OWNER_SESSION_VERSION ?? "1").trim() || "1";
   return { sessionSecret: secret, version, accounts };
+}
+
+function readSkinApi(env: NodeJS.ProcessEnv, problems: string[]): Config["skinApi"] {
+  const key = (env.SKINAPI_KEY ?? "").trim();
+  if (key === "") return null;
+  const baseUrl = ((env.SKINAPI_URL ?? "").trim() || "https://skinapi.skinvaults.online/api/v1").replace(/\/+$/, "");
+  if (!/^https:\/\/[^\s/]+(\/[^\s?#]*)?$/.test(baseUrl)) problems.push("SKINAPI_URL must be an https URL such as https://skinapi.skinvaults.online/api/v1");
+  return { baseUrl, key };
 }
 
 function readInt(raw: string | undefined, fallback: number, name: string, problems: string[]): number {

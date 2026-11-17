@@ -10,6 +10,7 @@ import { createRateLimiter } from "./rateLimit.ts";
 import { verifyPassword } from "../platform/password.ts";
 import { cookieName, createSessionToken, readCookie, readSessionToken, sessionCookie, SESSION_TTL_MS, type OwnerAuth, type OwnerName } from "./ownerSession.ts";
 import { renderLive } from "./live.ts";
+import { createSteamRoutes, type SteamOptions } from "./steamRoutes.ts";
 import type { Logger } from "../platform/logger.ts";
 
 const MAX_BODY = 4096;
@@ -25,7 +26,7 @@ const SECURITY_HEADERS = {
   "content-security-policy": "default-src 'none'; style-src 'self'; img-src 'self' data:; font-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
 };
 
-function redirect(res: ServerResponse, to: string, extra: Record<string, string> = {}): true {
+function redirect(res: ServerResponse, to: string, extra: Record<string, string | string[]> = {}): true {
   res.writeHead(303, { location: to, "cache-control": "no-store", ...SECURITY_HEADERS, ...extra });
   res.end();
   return true;
@@ -34,7 +35,7 @@ function redirect(res: ServerResponse, to: string, extra: Record<string, string>
 export type Web = { handle(req: IncomingMessage, res: ServerResponse, url: URL): Promise<boolean> };
 
 // no-transform stops Cloudflare from rewriting the page (it would replace the contact address with "[email protected]").
-function html(res: ServerResponse, status: number, body: string, extra: Record<string, string> = {}): true {
+function html(res: ServerResponse, status: number, body: string, extra: Record<string, string | string[]> = {}): true {
   res.writeHead(status, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store, no-transform", ...SECURITY_HEADERS, ...extra });
   res.end(body);
   return true;
@@ -74,6 +75,7 @@ export type WebOptions = {
   owners?: OwnerAuth | null; // owner and co-owner sign-in; null or missing switches it off
   notify?: (text: string) => void; // told about owner sign-ins and lockouts
   log?: Logger;
+  steam?: SteamOptions; // Steam sign-in and inventory (price service, fakes for tests)
 };
 
 // Every password is checked even after a match, so the time taken does not tell which account matched.
@@ -98,7 +100,14 @@ export function createWeb(pool: Pool, site: SiteInfo, options: WebOptions = {}):
   let lockoutAnnouncedAt = 0;
   const notify = (text: string) => { try { options.notify?.(text); } catch { /* an alert must never break a request */ } };
   const currentOwner = (req: IncomingMessage): OwnerName | null => (owners ? readSessionToken(owners, readCookie(req.headers.cookie, cookieName(secure))) : null);
-  const page = (res: ServerResponse, status: number, p: Parameters<typeof layout>[1], headers?: Record<string, string>) => html(res, status, layout(site, p), headers);
+  const page = (res: ServerResponse, status: number, p: Parameters<typeof layout>[1], headers?: Record<string, string | string[]>) => html(res, status, layout(site, p), headers);
+  const steam = createSteamRoutes({
+    pool, baseUrl: site.baseUrl, secure, log: options.log, options: options.steam ?? {},
+    page: (res, status, p, headers) => page(res, status, p, { ...OWNER_HEADERS, ...headers }),
+    redirect: (res, to, extra) => redirect(res, to, { "x-robots-tag": "noindex, nofollow", ...extra }),
+    sameOrigin: (req) => sameOrigin(req, site.baseUrl),
+    clientKey,
+  });
 
   return {
     async handle(req, res, url) {
@@ -124,7 +133,7 @@ export function createWeb(pool: Pool, site: SiteInfo, options: WebOptions = {}):
         return true;
       }
       if (get && path === "/robots.txt") {
-        return text(res, "text/plain; charset=utf-8", `User-agent: *\nAllow: /\nDisallow: /waitlist\nDisallow: /owner\n\nSitemap: ${site.baseUrl}/sitemap.xml\n`, "public, max-age=3600");
+        return text(res, "text/plain; charset=utf-8", `User-agent: *\nAllow: /\nDisallow: /waitlist\nDisallow: /owner\nDisallow: /inventory\nDisallow: /auth\n\nSitemap: ${site.baseUrl}/sitemap.xml\n`, "public, max-age=3600");
       }
       if (get && path === "/sitemap.xml") {
         const urls = ["/", "/privacy"].map((p) => `<url><loc>${esc(site.baseUrl + p)}</loc></url>`).join("");
@@ -160,6 +169,7 @@ export function createWeb(pool: Pool, site: SiteInfo, options: WebOptions = {}):
         if (!sameOrigin(req, site.baseUrl)) return loginPage_(403, "refused");
         return redirect(res, "/", { "set-cookie": sessionCookie("", secure, 0) });
       }
+      if (owner !== null && (await steam.handle(req, res, url))) return true;
       if (owner !== null && !(get && path === "/" && url.searchParams.get("view") === "public")) {
         const live = renderLive(path, owner);
         if (live !== null) return page(res, 200, live, OWNER_HEADERS);

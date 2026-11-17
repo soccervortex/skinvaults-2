@@ -78,3 +78,17 @@ The coming-soon page has an "Owner login" link (header on desktop, footer everyw
 **Change a password.** Run the script again and replace the line. **Sign everybody out** (lost phone, shared screen): change `OWNER_SESSION_VERSION` (for example 1 to 2) or `SESSION_SECRET`. **Forgot it:** run the script again.
 
 **Limits and alerts.** 5 attempts per address and 30 in total per 15 minutes, then the page answers 429 for everybody until the window passes (the address header can be forged when the app is reached without Cloudflare, so the total limit is the real brake). The owner gets an alert on every successful sign-in and once per lockout. Failed attempts are logged as `owner_login_failed`. Cookie: `__Host-sv_owner`, HttpOnly, Secure, SameSite=Lax, valid 12 hours.
+
+## Steam sign-in and inventory (owner preview only, for now)
+
+Pages: `/inventory` (lookup by Steam ID, profile link or custom name), `/inventory/<steamid64>` (the inventory), `/auth/steam` (sign in), `POST /auth/logout`, `POST /account/delete` (removes the user, sessions and cached inventory). For now the router only hands these paths to a signed-in owner or co-owner; for everybody else they do not exist (404). Going public means removing that gate in `src/web/router.ts` (the `owner !== null && steam.handle` line) and moving the links out of `live.ts`.
+
+**Environment.** `SKINAPI_KEY` (and optionally `SKINAPI_URL`, default `https://skinapi.skinvaults.online/api/v1`). Without a key the inventory still works, without prices and without a total. Use a separate SkinAPI key for 2.0 when one exists (the old site's key is shared for now).
+
+**Where data comes from.** Items, float (Wear Rating), pattern seed (Pattern Template) and sticker names come from Steam's own inventory JSON, read by us. Prices come from SkinAPI `GET /inventory` (lowest marketplace price per asset, EUR, minor units). If SkinAPI is down the page says so and shows no value. Steam answers 429 now and then: a saved copy up to 24 hours old is then shown with a note, otherwise the page asks the visitor to try again.
+
+**Cache and limits.** `inventory_cache` keeps the last read per Steam ID for 10 minutes (a refresh inside the first minute is ignored), rows older than 7 days are deleted by the `session-cleanup` job. Two people asking for the same inventory share one Steam call. 30 lookups per address per 10 minutes. Each lookup is one Steam call plus one SkinAPI call, and SkinAPI reads Steam itself, so a busy day means twice the Steam traffic from this home connection.
+
+**Sessions.** Cookie `__Host-sv_session` (HttpOnly, Secure, SameSite=Lax, 30 days). The database stores only the SHA-256 of the token. The sign-in start sets a 10-minute `__Host-sv_oid` state cookie that must match the `s` value in the OpenID return address, which stops somebody else's sign-in being forced on you.
+
+**Images.** Item and avatar images load from `*.steamstatic.com` (Valve's CDN), so a visitor's address is visible to Valve. The inventory pages have their own CSP for that; the rest of the site still allows no third-party images. Mention this on the privacy page before going public.

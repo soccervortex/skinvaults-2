@@ -9,6 +9,9 @@ import { createSenders } from "./platform/senders.ts";
 import { createAlerter } from "./platform/alerts.ts";
 import { createWeb, notFoundHtml } from "./web/router.ts";
 import { deleteStalePending } from "./waitlist.ts";
+import { createSkinApi } from "./platform/skinapi.ts";
+import { deleteExpiredSessions } from "./users.ts";
+import { deleteOldInventories } from "./inventory.ts";
 
 const startedAt = Date.now();
 
@@ -45,11 +48,12 @@ async function main(): Promise<void> {
   const jobs: Job[] = [
     { name: "outbox-delivery", everyMs: 15_000, run: async () => { await deliverDue(pool, senders, alert, log); } },
     { name: "waitlist-cleanup", everyMs: 6 * 60 * 60_000, run: async () => { await deleteStalePending(pool); } },
+    { name: "session-cleanup", everyMs: 6 * 60 * 60_000, run: async () => { await deleteExpiredSessions(pool); await deleteOldInventories(pool); } },
   ];
   const handle = await startJobs(pool, jobs, log);
 
   const site = { baseUrl: config.site.publicBaseUrl, discordInviteUrl: config.site.discordInviteUrl, contactEmail: config.site.contactEmail };
-  const web = createWeb(pool, site, { owners: config.owners, notify: (text) => void alert(text).catch(() => undefined), log });
+  const web = createWeb(pool, site, { owners: config.owners, notify: (text) => void alert(text).catch(() => undefined), log, steam: { skinApi: config.skinApi ? createSkinApi(config.skinApi) : null } });
 
   const server = createServer((req, res) => {
     const url = new URL(req.url ?? "/", "http://localhost");

@@ -7,7 +7,7 @@ import type { OwnerName } from "./ownerSession.ts";
 
 type Status = "not built" | "in progress" | "ready to review";
 const LAUNCH_FEATURES: [string, string, Status][] = [
-  ["Inventory with value, float, seed and stickers", "The hook: float and seed come from Steam, prices from our price data.", "not built"],
+  ["Inventory with value, float, seed and stickers", "The hook: float and seed come from Steam, prices from our price data. Steam sign-in is built too.", "ready to review"],
   ["One page per skin", "Price per marketplace and a price history chart. The base for Google.", "not built"],
   ["Search", "Find a skin by name.", "not built"],
   ["Price compare", "One skin across every marketplace.", "not built"],
@@ -31,6 +31,8 @@ export function previewHome(owner: OwnerName): Page {
 <p class="notice" role="status">Owner preview. You are signed in as <strong>${esc(owner)}</strong>. Visitors cannot see this page: they see the coming-soon page.</p>
 <h1>The new SkinVaults appears here first.</h1>
 <p class="lead">Every page we build shows up here before the public sees it. Only the owner and co-owner can sign in.</p>
+<h2>Try it</h2>
+<p><a class="button" href="/inventory">Inventory value</a></p>
 <h2>Launch features</h2>
 <ul>${rows}</ul>
 <p><a class="button ghost" href="/?view=public">View the public page</a></p>
