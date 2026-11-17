@@ -32,9 +32,9 @@ export function homePage(site: SiteInfo, state: "none" | "check-inbox" | "invali
 ${CROSSHAIR}
 <div class="wrap">
 <div class="hero-copy">
-<p class="status-line mono"><span class="blink" aria-hidden="true"></span>Rebuild in progress</p>
+<p class="status-line mono"><span class="blink" aria-hidden="true"></span>Planned release: 29 January 2027</p>
 <h1>CS2 skin prices.<br><em>Fewer tabs.</em></h1>
-<p class="sub">SkinVaults is being rebuilt from scratch: smaller, faster and easy to find on Google. Leave your e-mail and we tell you once, when it opens.</p>
+<p class="sub">SkinVaults is being rebuilt from scratch: smaller, faster and easy to find on Google. We aim to open on 29 January 2027, and only when it is properly tested. Leave your e-mail and we tell you once, when it opens.</p>
 ${notice}
 <form class="signup" id="join" method="post" action="/waitlist">
 <label class="mono" for="email">E-mail address</label>
@@ -50,8 +50,8 @@ ${notice}
 <i></i><i></i><i></i><i></i>
 <div class="title">// Status</div>
 <dl>
-<div><dt>Site</dt><dd>Rebuilding</dd></div>
-<div><dt>Release</dt><dd>No date yet</dd></div>
+<div><dt>Site</dt><dd>In development</dd></div>
+<div><dt>Release</dt><dd>Target 29 Jan 2027</dd></div>
 <div><dt>Waiting list</dt><dd class="ok">Open</dd></div>
 <div><dt>Cases and gambling</dt><dd>None</dd></div>
 <div><dt>Trackers</dt><dd>None</dd></div>
@@ -77,7 +77,7 @@ ${discordButton}
 <div class="col right">
 <p class="tag">// What we will not build</p>
 <p class="big">No cases. No gambling games.</p>
-<p class="copy">The rules around them are complicated and we would rather be safe than sorry. And we will not invent a release date.</p>
+<p class="copy">The rules around them are complicated and we would rather be safe than sorry. And we will not rush the release: if it is not ready, the date moves.</p>
 </div>
 </div>
 </section>`;
