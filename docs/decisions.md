@@ -46,3 +46,15 @@ Test profile: the site's own Steam account (`SV_WEBSITE_PRIVATE_STEAM_ID` in the
 - So the "hook" feature (inventory with value, float, seed and stickers) needs no bots, no game coordinator and no inspect-link decoding for items in a public inventory. Inspect-link lookup for items that are not in a public inventory (for example a link pasted from a market listing) still needs SkinAPI `/float` or the CSFloat serializer.
 - SkinAPI `/inventory` (141 items, total 36.41 EUR, 0.74 s) returns price but **no float, seed or stickers**, so for 2.0 we merge two sources: Steam for float and seed, SkinAPI for prices.
 - Not tested: SkinAPI `/float` with a real inspect link (my link had a made-up `D` value and stayed `queued`), sticker prices, and Steam's rate limit for many inventories in a row. Cache every inventory in Postgres and rate-limit our own lookups.
+
+### SkinAPI retest after the fixes, 2026-11-18
+
+| Check | Result |
+|---|---|
+| `status` | `operational`, every component ok (workers fresh, database writable) |
+| `markets` links | A `url` per marketplace now. Buff, csgo.tm, cs.money, Skinport, Waxpeer are **search pages** on the marketplace, Steam is the exact listing, **loot.farm and swap.gg have none**. Not item-level deep links, so affiliate links need a per-marketplace check of what each programme accepts |
+| `float/leaderboard` | 200, but empty (count 0): nothing has been collected yet |
+| `/float` with a real inspect link | Stays `queued`; the float bots log `inspect failed: inspect timeout` for every request. Do not build on `/float` |
+| Plan gate | The 402 on the owner key is gone |
+
+**Decoding an inspect link locally works.** The Item Certificate that Steam puts in the inventory (and the payload inside a `steam://run/730//+csgo_econ_action_preview%20<hex>` link) is a masked protobuf: XOR every byte with the first byte, drop the first byte and the last 4 (checksum), read fields 3 defindex, 4 paintindex, 7 wear (float32 bits), 8 paintseed, 12 stickers. Decoded in about 20 lines of Python for the test item: float 0.0358386, seed 71, matching Steam's own `asset_properties` exactly. So both paths of the hook feature need no bots and no SkinAPI float service: inventory items use Steam's `asset_properties`, a pasted link is decoded in our own code. Old-style links (`S...A...D...`) still need Valve's game coordinator and are out of scope.
