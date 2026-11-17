@@ -18,3 +18,30 @@
 | 2026-11-16 | Every colour and size comes from one token block in `src/web/theme.ts`; the current values are a neutral placeholder | Designing the final look now | The real look comes from the design phase and should replace one block, not every page |
 | 2026-11-16 | Waiting list is double opt-in; confirm and remove links open a page with a button instead of acting on GET; unsubscribing deletes the row; unconfirmed rows are deleted after 7 days | Single opt-in, soft delete | Mail scanners fetch links and would confirm or remove on GET. Deleting is the simplest way to honour "delete my data" |
 | 2026-11-16 | No cookies, no trackers, no external fonts or scripts; strict Content-Security-Policy | Analytics from day one | Nothing to ask consent for, nothing third parties can see. Analytics can be added later with a decision |
+| 2026-11-17 | Release target is Friday 29 January 2027 (reserve: 12 February). It is a target: the date moves if the release criteria are not met. Shown on the coming-soon page | A fixed promise, or no date | Owner wants an honest date to plan around, and "properly tested, not like 1.0" beats speed |
+| 2026-11-17 | Planned launch features: inventory with value, float, seed and stickers plus inspect-link lookup (the hook), price compare, alerts, wishlist, guides and blog. Deals and trade-up after launch. Giveaways undecided | Everything at once | Fewer features done well. SkinAPI already has most of the data |
+| 2026-11-17 | Revenue plan (proposal, owner has not confirmed): affiliate links first, Pro subscription after launch, no ads, no chance mechanics. Log anonymous outbound clicks from day one | Ads, credits, cases | Ads conflict with "no trackers" and page speed; credits and cases were the legal risk of 1.0 |
+| 2026-11-17 | SkinAPI stays the data layer, called server-side only | Own price fetching | Already built, 11 marketplaces, float, inventory, alerts |
+| 2026-11-17 | Credits are kept: every balance is imported 1:1 at launch and the 3 open prize claims are honoured. No history import, no way to win or lose credits in 2.0, and no cash-out | Starting the credit ledger empty (the earlier plan) | The server owner told members on 2026-11-16 that no credits would be lost and won items stay theirs. Measured 2026-11-17: 134 users hold a balance, 46.4M credits in total, one account holds 38.2M (82 percent, almost all from plinko), 273,500 credits were bought with real money in total, 3 claims are PENDING. What credits can be spent on in 2.0 is still open |
+
+
+## SkinAPI live test, 2026-11-17 (read-only calls with the owner key)
+
+| Endpoint | Result |
+|---|---|
+| `markets` | Works. 8 sources for AK-47 Redline FT, prices in minor units, fresh within 10 minutes, about 0.8 s. **No listing URL per marketplace in the response**, so affiliate deep links need another source or a per-market URL builder |
+| `history` | Works. Daily average and volume, 30 days in 0.3 s |
+| `float/leaderboard` | **402: needs the Pro plan, the owner key has plan `owner_wes`.** The SkinAPI session says the plan gate did not know `owner_wes` and fixed it in code (not deployed when this was written). `/float` itself was not called yet, so not tested |
+| `inventory` | Needs `game=cs2` (not 730). Not tested with data: the test profile was private. Needs a public Steam id |
+| `status` | `degraded`. Workers (ingestor, alerts, floatbots, tracker) show stale about 19 hours. Cause in the logs: **the SkinAPI MongoDB Atlas cluster is over its 512 MB quota and blocks writes** (the tracker could not snapshot inventories, the ingestor status write failed). Prices are still updating, so only part of the writes fail |
+| Host | Disk of the PC is at about 94 percent |
+
+Consequences: alerts and float depend on workers that currently cannot write their state, so fix the quota (clean old data or upgrade the cluster) before building on them. Inventory history cannot be recorded until then.
+
+### Float and seed come from Steam itself, tested 2026-11-17
+
+Test profile: the site's own Steam account (`SV_WEBSITE_PRIVATE_STEAM_ID` in the old env, public inventory, 141 items).
+- `GET steamcommunity.com/inventory/<id>/730/2?count=200` from this PC returned HTTP 200 (not blocked from this IP). The response has an `asset_properties` list: **Pattern Template (paint seed), Wear Rating (the float)** and an Item Certificate string, for 115 of the 141 items (the rest are items without wear, such as stickers, cases and agents). Sticker names are in the item description text.
+- So the "hook" feature (inventory with value, float, seed and stickers) needs no bots, no game coordinator and no inspect-link decoding for items in a public inventory. Inspect-link lookup for items that are not in a public inventory (for example a link pasted from a market listing) still needs SkinAPI `/float` or the CSFloat serializer.
+- SkinAPI `/inventory` (141 items, total 36.41 EUR, 0.74 s) returns price but **no float, seed or stickers**, so for 2.0 we merge two sources: Steam for float and seed, SkinAPI for prices.
+- Not tested: SkinAPI `/float` with a real inspect link (my link had a made-up `D` value and stayed `queued`), sticker prices, and Steam's rate limit for many inventories in a row. Cache every inventory in Postgres and rate-limit our own lookups.

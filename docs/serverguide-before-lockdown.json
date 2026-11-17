@@ -1,0 +1,31 @@
+{
+ "guild_id": "1453751539792347304",
+ "enabled": true,
+ "welcome_message": {
+  "author_ids": [
+   "661557499056619520"
+  ],
+  "message": "Join our CS2 community to track skins, get alerts, and connect with traders!\""
+ },
+ "new_member_actions": [
+  {
+   "channel_id": "1453751541365342446",
+   "action_type": 0,
+   "title": "Go to welcome",
+   "description": ""
+  },
+  {
+   "channel_id": "1453752785140187349",
+   "action_type": 0,
+   "title": "Read announcements",
+   "description": ""
+  },
+  {
+   "channel_id": "1453752841398259842",
+   "action_type": 0,
+   "title": "Read the FAQ",
+   "description": ""
+  }
+ ],
+ "resource_channels": []
+}

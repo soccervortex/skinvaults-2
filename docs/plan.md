@@ -95,7 +95,7 @@ name that says what it does.
 - Money, balances and draw results are computed **server-side only**; the client never sends a price or a result.
 - Core tables (always): `users` (steam_id, name, avatar, created_at), `sessions`, `job_runs`, `outbox`, `events` (own counters), `price_cache`, `item_images`.
 - Feature tables are added by the feature's own migration, and only when that feature is approved.
-- Migrate from the old site only: Steam id, trade URL, Discord id, wishlist, newsletter consent with date, and any still-running Pro. Everything else starts empty.
+- Migrate from the old site only: Steam id, trade URL, Discord id, wishlist, newsletter consent with date, any still-running Pro, **the credit balance of every user** (one `credit_balances` row each plus one ledger row "migrated from 1.0", not the 170k history) and **the open prize claims**. Everything else starts empty. These two are public promises, see `promises.md`.
   The import is one read-only script run once, with a row count before and after.
 
 ## 6. Errors, alerts, proof
@@ -177,3 +177,35 @@ A small first slice (call it slice 0.5) that can go live before the real product
 Things to decide before building it: release date (or "no date yet"), what the waitlist promises, **double opt-in and a working unsubscribe link**
 (e-mail consent rules; the old site had 29 subscribers with consent dates, and whether they may be mailed needs checking), and where the
 waitlist e-mails are stored (our Postgres, deleted on request).
+
+## 14. Release plan (agreed 2026-11-17)
+
+**Target: Friday 29 January 2027. Reserve: Friday 12 February 2027.** Publicly we say "target", never "promise". The date moves when a criterion below is not met; it never moves because we are in a hurry.
+
+### Planned launch features
+Hook: inventory with value, float, seed and stickers, plus inspect-link lookup (float and seed come from Steam's inventory JSON, prices from SkinAPI, see `decisions.md`). Core: price compare, alerts, wishlist, guides and blog. After launch: deals, trade-up calculator. Undecided: giveaways, what credits can be spent on, Pro.
+
+### Schedule
+| Period | Work |
+|---|---|
+| 17 to 30 Nov | Freeze the feature list, design format, domain cut-over and languages. Finish slice 0 (restore test, Steam block test: Steam answered from this PC, still to test from the Nebula container) |
+| December | Build: Steam sign-in, the hook, price compare, alerts, wishlist, blog |
+| Early January | Import of old data (including credits and open prize claims, see `promises.md`), SEO and 301 redirects, legal pages, outbound click log |
+| About 4 to 22 January | Only testing and fixing: closed beta with Discord members, load test, restore drill, mobile and desktop screenshots |
+| 29 January | Release |
+
+### Release criteria (all must be true, otherwise the date moves)
+1. `npm test` (lint, types, all tests) is green, and the tests include a forced failing webhook and a forced failing job that notify the owner.
+2. A backup was restored into a scratch database in the last 7 days and the site ran on it.
+3. Credit import: row count and sum of balances match the old database before and after; the 3 open prize claims exist (`promises.md`).
+4. Old URLs that Google knows either keep their path or have a 301; checked with a list.
+5. Every public page: own title, description, canonical, structured data; sitemap generated; pages render without JavaScript.
+6. Closed beta ran at least 2 weeks with no open bug that loses data, money or credits, and no unexplained 5xx in the logs.
+7. Load test: the app stays under 2 GB memory with the expected traffic and survives a SkinAPI outage (shows cached prices with "last updated").
+8. SkinAPI health is `ok` (workers fresh, database below 80 percent of quota) on the day, and its disk and database space are checked weekly until then.
+9. Legal pages are complete: company name and registration number, privacy text, affiliate disclosure, waiting-list mail consent. Secrets that leaked in the old repo and old env are rotated.
+10. Mobile (390 px) and desktop screenshots of every page reviewed, accessibility floor met.
+11. Runbook and decisions are up to date, and a person who has never seen the setup can redeploy from them.
+
+### Public wording
+Say "January 2027" in announcements. Announce the exact day about 3 weeks before, and only if criteria 1 to 5 are already met.
