@@ -49,7 +49,7 @@ async function main(): Promise<void> {
   const handle = await startJobs(pool, jobs, log);
 
   const site = { baseUrl: config.site.publicBaseUrl, discordInviteUrl: config.site.discordInviteUrl, contactEmail: config.site.contactEmail };
-  const web = createWeb(pool, site);
+  const web = createWeb(pool, site, { owners: config.owners, notify: (text) => void alert(text).catch(() => undefined), log });
 
   const server = createServer((req, res) => {
     const url = new URL(req.url ?? "/", "http://localhost");

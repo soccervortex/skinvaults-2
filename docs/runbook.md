@@ -65,3 +65,16 @@ Traffic path: Cloudflare (proxied apex and `www`) -> tunnel `skinvaults-tunnel` 
 - Remove a person by hand: `delete from waitlist where lower(email) = lower('...')`. Their own remove link does the same.
 - Settings: `PUBLIC_BASE_URL` (canonical links, sitemap, mail links), `DISCORD_INVITE_URL` (shown when set), `CONTACT_EMAIL` (privacy page).
 - Never send anything to `pending` rows other than the confirmation mail.
+
+## Owner sign-in (owner and co-owner)
+
+The coming-soon page has an "Owner login" link (header on desktop, footer everywhere). Signing in shows the pages visitors cannot see (`src/web/live.ts`); visitors only ever get the coming-soon page. `/?view=public` shows the public page to a signed-in owner.
+
+**Set it up.** Passwords are never stored, only scrypt hashes.
+1. Each person runs `npm run owner:hash -- owner` (or `-- co-owner`) in a terminal and types their own password twice (12 to 256 characters, nothing is shown). It prints one line.
+2. Add that line to the app's environment in the Nebula panel: `OWNER_PASSWORD_HASH=...` and `COOWNER_PASSWORD_HASH=...`. Saving redeploys.
+3. `SESSION_SECRET` (at least 32 random characters) must be set too. Without any hash the sign-in page says "not set up".
+
+**Change a password.** Run the script again and replace the line. **Sign everybody out** (lost phone, shared screen): change `OWNER_SESSION_VERSION` (for example 1 to 2) or `SESSION_SECRET`. **Forgot it:** run the script again.
+
+**Limits and alerts.** 5 attempts per address and 30 in total per 15 minutes, then the page answers 429 for everybody until the window passes (the address header can be forged when the app is reached without Cloudflare, so the total limit is the real brake). The owner gets an alert on every successful sign-in and once per lockout. Failed attempts are logged as `owner_login_failed`. Cookie: `__Host-sv_owner`, HttpOnly, Secure, SameSite=Lax, valid 12 hours.

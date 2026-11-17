@@ -77,7 +77,7 @@ h1 em { font-style: normal; color: var(--accent); }
 .signup { max-width: 36rem; }
 .signup label { display: block; margin-bottom: .5rem; color: var(--muted); }
 .field-row { display: flex; flex-wrap: wrap; gap: .5rem; }
-.field-row input[type=email] { flex: 1 1 15rem; min-width: 0; min-height: 58px; border: 1px solid var(--line-2); background: var(--panel-2); padding: 0 1.1rem; font: inherit; font-size: 1.1rem; color: var(--text); border-radius: 0; }
+.field-row input[type=email], .field-row input[type=password] { flex: 1 1 15rem; min-width: 0; min-height: 58px; border: 1px solid var(--line-2); background: var(--panel-2); padding: 0 1.1rem; font: inherit; font-size: 1.1rem; color: var(--text); border-radius: 0; }
 .field-row input::placeholder { color: var(--faint); }
 .field-row button { flex: 1 1 auto; }
 .hint { margin: .9rem 0 0; font-size: .9rem; line-height: 1.5; color: var(--faint); }

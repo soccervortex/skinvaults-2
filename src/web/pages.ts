@@ -110,7 +110,7 @@ export function privacyPage(site: SiteInfo): Page {
     index: true,
     body: narrow(`
 <h1>Privacy</h1>
-<p class="lead">Short version: if you join the waiting list we keep your e-mail address, and nothing else. No trackers, no ads, no cookies.</p>
+<p class="lead">Short version: if you join the waiting list we keep your e-mail address, and nothing else. No trackers, no ads, and no cookies for visitors. The only cookie is a sign-in cookie that exists after the site owners sign in.</p>
 <h2>What we store</h2>
 <ul>
 <li>Your e-mail address, the time you signed up and the time you confirmed.</li>
@@ -137,6 +137,30 @@ export function actionPage(path: string, title: string, heading: string, message
     description: message,
     index: false,
     body: narrow(`<h1>${esc(heading)}</h1><p class="notice${error ? " error" : ""}" role="${error ? "alert" : "status"}">${esc(message)}</p>${f}<p><a class="button ghost" href="/">Back to the home page</a></p>`),
+  };
+}
+
+export type LoginState = "none" | "wrong" | "busy" | "unconfigured" | "refused";
+export function loginPage(state: LoginState = "none"): Page {
+  const notice =
+    state === "wrong" ? `<p class="notice error" role="alert">That password is not right.</p>`
+    : state === "busy" ? `<p class="notice error" role="alert">Too many attempts. Please wait a few minutes and try again.</p>`
+    : state === "refused" ? `<p class="notice error" role="alert">This form can only be sent from our own site.</p>`
+    : state === "unconfigured" ? `<p class="notice error" role="alert">Owner sign-in is not set up on this server.</p>`
+    : "";
+  const form = state === "unconfigured" ? "" : `<form class="signup" method="post" action="/owner">
+<label class="mono" for="password">Password</label>
+<div class="field-row">
+<input id="password" name="password" type="password" autocomplete="current-password" required maxlength="256">
+<button type="submit">Sign in &rarr;</button>
+</div>
+</form>`;
+  return {
+    path: "/owner",
+    title: "Owner sign-in: SkinVaults",
+    description: "Sign-in for the owner and co-owner of SkinVaults.",
+    index: false,
+    body: narrow(`<h1>Owner sign-in</h1><p class="lead">For the owner and co-owner of SkinVaults. Everybody else: the site opens on 29 January 2027.</p>${notice}${form}<p><a class="button ghost" href="/">Back to the home page</a></p>`),
   };
 }
 

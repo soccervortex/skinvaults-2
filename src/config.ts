@@ -1,3 +1,6 @@
+import { isValidHash } from "./platform/password.ts";
+import type { OwnerAuth } from "./web/ownerSession.ts";
+
 // All configuration comes from environment variables. Anything missing or malformed is reported
 // by NAME in one error, so a bad deploy is fixed in one round. Values are never put in messages.
 
@@ -11,6 +14,8 @@ export type Config = {
   discordWebhooks: Record<string, string>;
   // Public site settings. publicBaseUrl has no trailing slash and is used for canonical URLs and links in e-mails.
   site: { publicBaseUrl: string; discordInviteUrl: string | null; contactEmail: string | null };
+  // Owner and co-owner sign-in. null (feature off) unless at least one password hash is set.
+  owners: OwnerAuth | null;
 };
 
 export class ConfigError extends Error {}
@@ -48,6 +53,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const contact = blank(env.CONTACT_EMAIL) ? null : env.CONTACT_EMAIL!.trim();
   if (contact !== null && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact)) problems.push("CONTACT_EMAIL is not a valid e-mail address");
 
+  const owners = readOwners(env, problems);
+
   if (problems.length > 0) {
     throw new ConfigError(`Cannot start, fix the environment:\n- ${problems.join("\n- ")}`);
   }
@@ -71,7 +78,25 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     },
     discordWebhooks: collectWebhooks(env),
     site: { publicBaseUrl, discordInviteUrl: invite, contactEmail: contact },
+    owners,
   };
+}
+
+// Passwords are never stored, only scrypt hashes made with `npm run owner:hash`. Values are never put in messages.
+function readOwners(env: NodeJS.ProcessEnv, problems: string[]): OwnerAuth | null {
+  const accounts: OwnerAuth["accounts"] = [];
+  for (const [name, variable] of [["owner", "OWNER_PASSWORD_HASH"], ["co-owner", "COOWNER_PASSWORD_HASH"]] as const) {
+    const value = (env[variable] ?? "").trim();
+    if (value === "") continue;
+    if (!isValidHash(value)) problems.push(`${variable} is not a valid hash (create it with: npm run owner:hash)`);
+    else accounts.push({ name, hash: value });
+  }
+  if (accounts.length === 2 && accounts[0]!.hash === accounts[1]!.hash) problems.push("OWNER_PASSWORD_HASH and COOWNER_PASSWORD_HASH must be different");
+  if (accounts.length === 0) return null;
+  const secret = (env.SESSION_SECRET ?? "").trim();
+  if (secret.length < 32) problems.push("SESSION_SECRET must be at least 32 characters when an owner password hash is set");
+  const version = (env.OWNER_SESSION_VERSION ?? "1").trim() || "1";
+  return { sessionSecret: secret, version, accounts };
 }
 
 function readInt(raw: string | undefined, fallback: number, name: string, problems: string[]): number {

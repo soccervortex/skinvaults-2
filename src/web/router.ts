@@ -4,9 +4,13 @@ import type { Pool } from "../platform/db.ts";
 import { cssPath, esc, faviconSvg, layout, type SiteInfo } from "./html.ts";
 import { logoPng } from "./logo.ts";
 import { themeCss } from "./theme.ts";
-import { actionPage, homePage, notFoundPage, privacyPage } from "./pages.ts";
+import { actionPage, homePage, loginPage, notFoundPage, privacyPage, type LoginState } from "./pages.ts";
 import { confirm, looksLikeToken, signup, unsubscribe } from "../waitlist.ts";
 import { createRateLimiter } from "./rateLimit.ts";
+import { verifyPassword } from "../platform/password.ts";
+import { cookieName, createSessionToken, readCookie, readSessionToken, sessionCookie, SESSION_TTL_MS, type OwnerAuth, type OwnerName } from "./ownerSession.ts";
+import { renderLive } from "./live.ts";
+import type { Logger } from "../platform/logger.ts";
 
 const MAX_BODY = 4096;
 // Self-hosted fonts live in public/fonts (shipped in the image). Only names matching this pattern are ever read.
@@ -20,6 +24,12 @@ const SECURITY_HEADERS = {
   "permissions-policy": "camera=(), microphone=(), geolocation=()",
   "content-security-policy": "default-src 'none'; style-src 'self'; img-src 'self' data:; font-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
 };
+
+function redirect(res: ServerResponse, to: string, extra: Record<string, string> = {}): true {
+  res.writeHead(303, { location: to, "cache-control": "no-store", ...SECURITY_HEADERS, ...extra });
+  res.end();
+  return true;
+}
 
 export type Web = { handle(req: IncomingMessage, res: ServerResponse, url: URL): Promise<boolean> };
 
@@ -60,8 +70,34 @@ export function clientKey(req: IncomingMessage): string {
   return h("cf-connecting-ip") || h("x-forwarded-for").split(",")[0]!.trim() || req.socket.remoteAddress || "unknown";
 }
 
-export function createWeb(pool: Pool, site: SiteInfo): Web {
+export type WebOptions = {
+  owners?: OwnerAuth | null; // owner and co-owner sign-in; null or missing switches it off
+  notify?: (text: string) => void; // told about owner sign-ins and lockouts
+  log?: Logger;
+};
+
+// Every password is checked even after a match, so the time taken does not tell which account matched.
+async function matchOwner(owners: OwnerAuth, password: string): Promise<OwnerName | null> {
+  let found: OwnerName | null = null;
+  for (const account of owners.accounts) {
+    if ((await verifyPassword(password, account.hash)) && found === null) found = account.name;
+  }
+  return found;
+}
+
+const OWNER_HEADERS = { "x-robots-tag": "noindex, nofollow", "cache-control": "private, no-store, no-transform" };
+
+export function createWeb(pool: Pool, site: SiteInfo, options: WebOptions = {}): Web {
   const limiter = createRateLimiter(5, 10 * 60_000);
+  const owners = options.owners ?? null;
+  const secure = site.baseUrl.startsWith("https://");
+  // Two limits: one per visitor address, and one for everybody together, because the address header can be forged
+  // when the app is reached without Cloudflare. Slow scrypt hashing is the third brake.
+  const loginPerAddress = createRateLimiter(5, 15 * 60_000);
+  const loginTotal = createRateLimiter(30, 15 * 60_000);
+  let lockoutAnnouncedAt = 0;
+  const notify = (text: string) => { try { options.notify?.(text); } catch { /* an alert must never break a request */ } };
+  const currentOwner = (req: IncomingMessage): OwnerName | null => (owners ? readSessionToken(owners, readCookie(req.headers.cookie, cookieName(secure))) : null);
   const page = (res: ServerResponse, status: number, p: Parameters<typeof layout>[1], headers?: Record<string, string>) => html(res, status, layout(site, p), headers);
 
   return {
@@ -88,12 +124,47 @@ export function createWeb(pool: Pool, site: SiteInfo): Web {
         return true;
       }
       if (get && path === "/robots.txt") {
-        return text(res, "text/plain; charset=utf-8", `User-agent: *\nAllow: /\nDisallow: /waitlist\n\nSitemap: ${site.baseUrl}/sitemap.xml\n`, "public, max-age=3600");
+        return text(res, "text/plain; charset=utf-8", `User-agent: *\nAllow: /\nDisallow: /waitlist\nDisallow: /owner\n\nSitemap: ${site.baseUrl}/sitemap.xml\n`, "public, max-age=3600");
       }
       if (get && path === "/sitemap.xml") {
         const urls = ["/", "/privacy"].map((p) => `<url><loc>${esc(site.baseUrl + p)}</loc></url>`).join("");
         return text(res, "application/xml; charset=utf-8", `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls}</urlset>`, "public, max-age=3600");
       }
+      // Owner and co-owner: sign in, sign out, and the pages visitors cannot see.
+      const loginPage_ = (status: number, state: LoginState, extra: Record<string, string> = {}) => page(res, status, loginPage(state), { ...OWNER_HEADERS, ...extra });
+      const owner = currentOwner(req);
+      if (path === "/owner" && get) return owner ? redirect(res, "/") : loginPage_(owners ? 200 : 503, owners ? "none" : "unconfigured");
+      if (path === "/owner" && req.method === "POST") {
+        if (!owners) return loginPage_(503, "unconfigured");
+        if (!sameOrigin(req, site.baseUrl)) return loginPage_(403, "refused");
+        const ip = clientKey(req);
+        if (!loginPerAddress.allow(ip) || !loginTotal.allow("all")) {
+          if (Date.now() - lockoutAnnouncedAt > 15 * 60_000) {
+            lockoutAnnouncedAt = Date.now();
+            options.log?.warn("owner_login_locked", { ip });
+            notify(`Owner sign-in is being hammered: too many attempts (last from ${ip}). It is locked for a few minutes.`);
+          }
+          return loginPage_(429, "busy", { "retry-after": "900" });
+        }
+        const form = await readForm(req);
+        const who = form === null ? null : await matchOwner(owners, form.get("password") ?? "");
+        if (who === null) {
+          options.log?.warn("owner_login_failed", { ip });
+          return loginPage_(401, "wrong");
+        }
+        options.log?.info("owner_login", { who, ip });
+        notify(`${who} signed in to the owner preview (${ip}).`);
+        return redirect(res, "/", { "set-cookie": sessionCookie(createSessionToken(owners, who), secure, Math.floor(SESSION_TTL_MS / 1000)) });
+      }
+      if (path === "/owner/logout" && req.method === "POST") {
+        if (!sameOrigin(req, site.baseUrl)) return loginPage_(403, "refused");
+        return redirect(res, "/", { "set-cookie": sessionCookie("", secure, 0) });
+      }
+      if (owner !== null && !(get && path === "/" && url.searchParams.get("view") === "public")) {
+        const live = renderLive(path, owner);
+        if (live !== null) return page(res, 200, live, OWNER_HEADERS);
+      }
+
       if (get && path === "/") return page(res, 200, homePage(site));
       if (get && path === "/privacy") return page(res, 200, privacyPage(site));
 

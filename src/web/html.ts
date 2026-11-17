@@ -54,14 +54,14 @@ ${ld}
 <a class="skip" href="#main">Skip to content</a>
 <header class="site"><div class="wrap">
 <a class="brand" href="/"><span class="mark cut" aria-hidden="true">SV</span><span class="name">${SITE_NAME}</span></a>
-<nav class="top" aria-label="Main"><a href="/#ideas">Ideas</a>${site.discordInviteUrl ? `<a href="${esc(site.discordInviteUrl)}" rel="noopener">Discord</a>` : ""}<a class="cta cut" href="/#join">Join the list</a></nav>
+<nav class="top" aria-label="Main"><a href="/#ideas">Ideas</a>${site.discordInviteUrl ? `<a href="${esc(site.discordInviteUrl)}" rel="noopener">Discord</a>` : ""}<a class="login" href="/owner">Owner login</a><a class="cta cut" href="/#join">Join the list</a></nav>
 </div></header>
 <main id="main">
 ${page.body}
 </main>
 <footer class="site"><div class="wrap">
 <span>&copy; ${new Date().getUTCFullYear()} ${SITE_NAME}</span>
-<nav aria-label="Footer"><a href="/privacy">Privacy</a>${site.discordInviteUrl ? ` &middot; <a href="${esc(site.discordInviteUrl)}" rel="noopener">Discord</a>` : ""}</nav>
+<nav aria-label="Footer"><a href="/privacy">Privacy</a> &middot; <a href="/owner">Owner login</a>${site.discordInviteUrl ? ` &middot; <a href="${esc(site.discordInviteUrl)}" rel="noopener">Discord</a>` : ""}</nav>
 </div></footer>
 </body>
 </html>`;
