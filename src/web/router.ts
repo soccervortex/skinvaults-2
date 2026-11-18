@@ -1,9 +1,10 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { readFile } from "node:fs/promises";
 import type { Pool } from "../platform/db.ts";
-import { cssPath, esc, faviconSvg, layout, type SiteInfo } from "./html.ts";
+import { appCssPath, cssPath, esc, faviconSvg, layout, type SiteInfo } from "./html.ts";
 import { logoPng } from "./logo.ts";
 import { themeCss } from "./theme.ts";
+import { appCss } from "./appTheme.ts";
 import { actionPage, homePage, loginPage, notFoundPage, privacyPage, type LoginState } from "./pages.ts";
 import { confirm, looksLikeToken, signup, unsubscribe } from "../waitlist.ts";
 import { createRateLimiter } from "./rateLimit.ts";
@@ -115,6 +116,7 @@ export function createWeb(pool: Pool, site: SiteInfo, options: WebOptions = {}):
       const get = req.method === "GET" || req.method === "HEAD";
 
       if (get && path === cssPath) return text(res, "text/css; charset=utf-8", themeCss, "public, max-age=31536000, immutable");
+      if (get && path === appCssPath) return text(res, "text/css; charset=utf-8", appCss, "public, max-age=31536000, immutable");
       const font = get ? FONT_RE.exec(path) : null;
       if (font) {
         let data = fontCache.get(font[1]!);

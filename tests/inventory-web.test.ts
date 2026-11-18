@@ -130,7 +130,9 @@ test("inventory page: value, float, seed and stickers are shown, and Steam is as
   assert.ok(!html.includes("<b>Person</b>"));
   assert.match(html, /€21\.16/); // 3.66 + 15.00 + 2.50: the charm has no price and is not counted
   assert.match(html, /0\.035838645/);
-  assert.match(html, /Seed <b>71<\/b>/);
+  assert.match(html, /Seed 71/);
+  assert.match(html, /href="\/assets\/app\.[0-9a-f]{10}\.css"/); // the real-site look, not the coming-soon look
+  assert.match(html, /class="floatbar"/);
   assert.match(html, /Mirage \(Gold\)/);
   assert.match(html, /steam:\/\/run\/730\/\/\+csgo_econ_action_preview%20/);
   assert.match(html, /https:\/\/community\.cloudflare\.steamstatic\.com\/economy\/image\//);
@@ -141,6 +143,26 @@ test("inventory page: value, float, seed and stickers are shown, and Steam is as
   await (await get(`/inventory/${ID}?sort=bogus`)).text();
   assert.equal(steam.inventoryCalls, 1); // served from the cache
   assert.equal(priceCalls, 1);
+});
+
+test("inventory page: filters narrow the list, unknown values are ignored", async () => {
+  await clearCache();
+  const count = (html: string) => (html.match(/<li class="card/g) ?? []).length;
+  const all = await (await get(`/inventory/${ID}`)).text();
+  assert.equal(count(all), 4);
+  const withFloat = await (await get(`/inventory/${ID}?show=float`)).text();
+  assert.equal(count(withFloat), 2); // the two skins that have a float
+  const stickers = await (await get(`/inventory/${ID}?show=stickers`)).text();
+  assert.equal(count(stickers), 1);
+  const fn = await (await get(`/inventory/${ID}?wear=FN`)).text();
+  assert.equal(count(fn), 1);
+  assert.match(fn, /PP-Bizon/);
+  const none = await (await get(`/inventory/${ID}?wear=BS`)).text();
+  assert.equal(count(none), 0);
+  assert.match(none, /No items match/);
+  const junk = await (await get(`/inventory/${ID}?show=<script>&wear=XX&sort=x`)).text();
+  assert.equal(count(junk), 4);
+  assert.ok(!junk.includes("<script>"));
 });
 
 test("inventory page: sticker names from Steam cannot inject markup", async () => {

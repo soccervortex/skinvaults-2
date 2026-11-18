@@ -10,7 +10,7 @@ import type { FetchLike } from "../steam/http.ts";
 import type { FetchInventoryOptions } from "../steam/inventory.ts";
 import { createUserSession, deleteUser, endUserSession, upsertUser, USER_SESSION_TTL_MS, userForSession } from "../users.ts";
 import { actionPage } from "./pages.ts";
-import { inventoryHome, inventoryPage, SORT_KEYS, type LookupNotice, type SortKey } from "./inventoryPage.ts";
+import { inventoryHome, inventoryPage, SHOW_KEYS, SORT_KEYS, WEARS, type Filters, type LookupNotice, type ShowKey, type SortKey, type WearCode } from "./inventoryPage.ts";
 import { readCookie, setCookie } from "./ownerSession.ts";
 import { createRateLimiter } from "./rateLimit.ts";
 import type { layout } from "./html.ts";
@@ -132,8 +132,14 @@ export function createSteamRoutes(ctx: RouteContext) {
           return ctx.page(res, code, inventoryHome(user, outcome.status), headers());
         }
         const asked = url.searchParams.get("sort");
-        const sort: SortKey = SORT_KEYS.includes(asked as SortKey) ? (asked as SortKey) : "value";
-        return ctx.page(res, 200, inventoryPage({ snapshot: outcome.snapshot, user, cached: outcome.cached, stale: outcome.stale, sort }), headers());
+        const show = url.searchParams.get("show");
+        const wear = url.searchParams.get("wear");
+        const filters: Filters = {
+          sort: SORT_KEYS.includes(asked as SortKey) ? (asked as SortKey) : "value",
+          show: SHOW_KEYS.includes(show as ShowKey) ? (show as ShowKey) : "all",
+          wear: WEARS.some((w) => w.code === wear) ? (wear as WearCode) : null,
+        };
+        return ctx.page(res, 200, inventoryPage({ snapshot: outcome.snapshot, user, cached: outcome.cached, stale: outcome.stale, filters }), headers());
       }
 
       return false;
