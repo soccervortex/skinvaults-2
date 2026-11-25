@@ -41,8 +41,8 @@ export function layout(site: SiteInfo, page: Page): string {
     : `<a class="who-link" href="/inventory/${esc(page.app!.user.steamId)}">${esc(page.app!.user.name)}</a><form method="post" action="/auth/logout"><button class="btn ghost" type="submit">Sign out</button></form>`;
   const chrome = app
     ? `<header class="bar"><div class="wrap">
-<a class="brand" href="/inventory"><span class="mark" aria-hidden="true">SV</span>${SITE_NAME}</a>
-<nav aria-label="Main"><a class="on" href="/inventory">Inventory</a></nav>
+<a class="brand" href="/"><span class="mark" aria-hidden="true">SV</span>${SITE_NAME}</a>
+<nav aria-label="Main"><a${page.path.startsWith("/inventory") ? ' class="on" aria-current="page"' : ""} href="/inventory">Inventory</a></nav>
 <div class="right">${right}</div>
 </div></header>`
     : `<header class="site"><div class="wrap">

@@ -10,7 +10,7 @@ import { confirm, looksLikeToken, signup, unsubscribe } from "../waitlist.ts";
 import { createRateLimiter } from "./rateLimit.ts";
 import { verifyPassword } from "../platform/password.ts";
 import { cookieName, createSessionToken, readCookie, readSessionToken, sessionCookie, SESSION_TTL_MS, type OwnerAuth, type OwnerName } from "./ownerSession.ts";
-import { renderLive } from "./live.ts";
+import { isLivePath, renderLive } from "./live.ts";
 import { createSteamRoutes, type SteamOptions } from "./steamRoutes.ts";
 import type { Logger } from "../platform/logger.ts";
 
@@ -173,8 +173,11 @@ export function createWeb(pool: Pool, site: SiteInfo, options: WebOptions = {}):
       }
       if (owner !== null && (await steam.handle(req, res, url))) return true;
       if (owner !== null && !(get && path === "/" && url.searchParams.get("view") === "public")) {
-        const live = renderLive(path, owner);
-        if (live !== null) return page(res, 200, live, OWNER_HEADERS);
+        // Only look the Steam session up for a path the private site really has.
+        if (get && isLivePath(path)) {
+          const live = renderLive(path, owner, await steam.currentUser(req));
+          if (live !== null) return page(res, 200, live, OWNER_HEADERS);
+        }
       }
 
       if (get && path === "/") return page(res, 200, homePage(site));

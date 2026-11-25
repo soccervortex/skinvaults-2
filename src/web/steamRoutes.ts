@@ -67,13 +67,16 @@ export function createSteamRoutes(ctx: RouteContext) {
   const failure = (res: ServerResponse, status: number, message: string) =>
     ctx.page(res, status, actionPage("/auth/steam", "Sign-in failed", "Sign-in failed", message, undefined, true));
 
+  const currentUser = (req: IncomingMessage) => userForSession(ctx.pool, readCookie(req.headers.cookie, sessionName) ?? null);
+
   return {
+    currentUser,
     async handle(req: IncomingMessage, res: ServerResponse, url: URL): Promise<boolean> {
       const path = url.pathname;
       if (!path.startsWith("/auth/") && !path.startsWith("/inventory") && path !== "/account/delete") return false;
       const get = req.method === "GET" || req.method === "HEAD";
       const post = req.method === "POST";
-      const user = await userForSession(ctx.pool, readCookie(req.headers.cookie, sessionName) ?? null);
+      const user = await currentUser(req);
 
       if (get && path === "/auth/steam") {
         if (!logins.allow(ctx.clientKey(req))) return failure(res, 429, "Too many sign-in attempts. Please wait a few minutes.");

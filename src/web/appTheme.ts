@@ -85,6 +85,43 @@ a:focus-visible, button:focus-visible, input:focus-visible { outline: 2px solid 
 .stack { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
 .stack form { margin: 0; }
 
+/* owner strip */
+.ownerbar { border-bottom: 1px solid var(--line); background: #191c18; font-size: .8125rem; }
+.ownerbar .wrap { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .25rem 1.5rem; padding-top: .45rem; padding-bottom: .45rem; }
+.ownerbar p { margin: 0; color: var(--text-2); }
+.ownerbar strong { color: var(--ok); font-weight: 600; }
+.ownerbar nav { display: flex; align-items: center; gap: 1rem; }
+.ownerbar a, .ownerbar button { color: var(--text-2); text-decoration: underline; text-underline-offset: 3px; }
+.ownerbar form { margin: 0; }
+.ownerbar button { background: none; border: 0; padding: .25rem 0; font: inherit; cursor: pointer; }
+
+/* home */
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.eyebrow { margin: 0 0 .9rem; font: 400 .75rem var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--accent); }
+.home { max-width: 75rem; padding-bottom: 4.5rem; }
+.home-hero { padding: 5rem 0 3.5rem; text-align: center; }
+.home-hero h1 { margin: 0 auto; max-width: 52rem; font-size: clamp(2.2rem, 5.5vw, 3.75rem); line-height: 1.07; font-weight: 700; letter-spacing: -.035em; text-wrap: balance; }
+.home-sub { margin: 1.25rem auto 0; max-width: 38rem; font-size: 1.125rem; color: var(--muted); }
+.home-form { margin: 2.25rem auto 0; max-width: 42.5rem; text-align: left; }
+.home-after { margin: .9rem 0 0; font-size: .8125rem; color: var(--muted); }
+.home-after a { text-decoration: underline; text-underline-offset: 3px; }
+.features { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: .75rem; }
+.feature { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 1.35rem; }
+.f-top { display: flex; justify-content: space-between; align-items: center; gap: .5rem; }
+.f-tag { width: 34px; height: 34px; border-radius: 8px; background: var(--panel-2); border: 1px solid var(--line); display: grid; place-items: center; font: 700 .8125rem var(--mono); color: var(--accent); }
+.feature h3 { margin: 1rem 0 .35rem; font-size: 1.0625rem; font-weight: 700; }
+.feature p { margin: 0; font-size: .875rem; line-height: 1.55; color: var(--muted); }
+.tag { flex: none; padding: .2rem .55rem; border-radius: 5px; border: 1px solid var(--line-2); font-size: .6875rem; font-weight: 600; color: var(--muted); white-space: nowrap; }
+.tag.ready { border-color: transparent; background: #16301f; color: var(--ok); }
+.home-next { margin-top: 3.5rem; }
+.home-next h2 { margin: 0 0 1.25rem; font-size: clamp(1.6rem, 3.5vw, 2.1rem); line-height: 1.15; font-weight: 700; letter-spacing: -.025em; }
+
+/* progress list */
+.progress { list-style: none; margin: 0; padding: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
+.progress li { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; padding: .9rem 1.1rem; border-top: 1px solid var(--line); }
+.progress li:first-child { border-top: 0; }
+.progress p { margin: .15rem 0 0; font-size: .8125rem; color: var(--muted); }
+
 /* inventory */
 .inv { padding-top: 1.5rem; padding-bottom: 4rem; }
 .who { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; }

@@ -135,6 +135,15 @@ test("HTTP: owner and co-owner sign in, see the preview, and visitors still see 
   assert.match(mine.headers.get("cache-control")!, /private, no-store/);
   assert.match(mine.headers.get("x-robots-tag")!, /noindex/);
 
+  // The owner lands on the real home page of the new site, in the app look, with a working inventory lookup.
+  assert.match(html, /href="\/assets\/app\.[0-9a-f]{10}\.css"/);
+  assert.match(html, /<form class="home-form" method="get" action="\/inventory">/);
+  const progress = await fetch(s.origin + "/owner/progress", { headers: { cookie: cookieOf(res) } });
+  assert.equal(progress.status, 200);
+  assert.match(progress.headers.get("cache-control")!, /private, no-store/);
+  assert.match(await progress.text(), /Price compare/);
+  assert.equal((await fetch(s.origin + "/owner/progress")).status, 404);
+
   const visitor = await (await fetch(s.origin + "/")).text();
   assert.match(visitor, /Planned release/);
   assert.ok(!/Owner preview/.test(visitor));
